@@ -1,0 +1,17 @@
+{
+  "elixirLS.fetchDeps": true,
+  "elixirLS.mixEnv": "dev",
+  "elixirLS.dialyzerEnabled": true,
+  "editor.formatOnSave": true,
+  "editor.formatOnType": true,
+  "editor.defaultFormatter": "JakeBecker.elixir-ls",
+  "[elixir]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "JakeBecker.elixir-ls"
+  },
+  "files.associations": {
+    "*.ex": "elixir",
+    "*.exs": "elixir",
+    "*.heex": "phoenix-heex"
+  }
+} 
