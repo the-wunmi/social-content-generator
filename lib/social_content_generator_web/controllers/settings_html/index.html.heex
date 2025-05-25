@@ -1,0 +1,59 @@
+<div class="mx-auto max-w-2xl">
+  <.header class="text-center">
+    Settings
+    <:subtitle>Manage your social media connections and automations</:subtitle>
+  </.header>
+
+  <div class="mt-10">
+    <h2 class="text-lg font-semibold mb-4">Social Media Connections</h2>
+    <div class="space-y-4">
+      <.link
+        :if={!Enum.any?(@integrations, &(&1.provider == "google"))}
+        navigate={~p"/settings/google/auth"}
+        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+      >
+        Connect Google Calendar
+      </.link>
+
+      <.link
+        :if={!Enum.any?(@integrations, &(&1.provider == "linkedin"))}
+        navigate={~p"/settings/linkedin/auth"}
+        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+      >
+        Connect LinkedIn
+      </.link>
+
+      <.link
+        :if={!Enum.any?(@integrations, &(&1.provider == "facebook"))}
+        navigate={~p"/settings/facebook/auth"}
+        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+      >
+        Connect Facebook
+      </.link>
+
+      <div :for={integration <- @integrations} class="flex items-center justify-between p-4 bg-white shadow rounded-lg">
+        <div class="flex items-center">
+          <div class="flex-shrink-0">
+            <.icon :if={integration.provider == "google"} name="hero-calendar" class="h-6 w-6 text-blue-600" />
+            <.icon :if={integration.provider == "linkedin"} name="hero-briefcase" class="h-6 w-6 text-blue-600" />
+            <.icon :if={integration.provider == "facebook"} name="hero-chat-bubble-left-right" class="h-6 w-6 text-blue-600" />
+          </div>
+          <div class="ml-4">
+            <h3 class="text-lg font-medium text-gray-900">
+              <%= String.capitalize(integration.provider) %>
+            </h3>
+            <p class="text-sm text-gray-500">
+              Connected
+            </p>
+          </div>
+        </div>
+        <.link
+          navigate={~p"/settings/automations"}
+          class="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        >
+          Manage Automations
+        </.link>
+      </div>
+    </div>
+  </div>
+</div> 

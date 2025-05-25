@@ -15,4 +15,9 @@ defmodule SocialContentGenerator.Meetings do
     do: Repo.update_all(Meeting.soft_delete(Meeting), where: [id: meeting.id])
 
   def change_meeting(%Meeting{} = meeting, attrs \\ %{}), do: Meeting.changeset(meeting, attrs)
+
+  def list_user_meetings(user_id),
+    do:
+      from(m in Meeting, where: m.user_id == ^user_id and is_nil(m.deleted_at))
+      |> Repo.all()
 end

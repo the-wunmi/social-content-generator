@@ -18,4 +18,9 @@ defmodule SocialContentGenerator.Automations do
 
   def change_automation(%Automation{} = automation, attrs \\ %{}),
     do: Automation.changeset(automation, attrs)
+
+  def list_automations_by_user(user_id),
+    do:
+      from(a in Automation, where: a.user_id == ^user_id and is_nil(a.deleted_at))
+      |> Repo.all()
 end

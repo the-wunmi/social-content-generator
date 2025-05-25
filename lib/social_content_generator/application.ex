@@ -10,8 +10,11 @@ defmodule SocialContentGenerator.Application do
     children = [
       SocialContentGeneratorWeb.Telemetry,
       SocialContentGenerator.Repo,
-      {DNSCluster, query: Application.get_env(:social_content_generator, :dns_cluster_query) || :ignore},
+      {DNSCluster,
+       query: Application.get_env(:social_content_generator, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: SocialContentGenerator.PubSub},
+      # Start Oban
+      {Oban, Application.fetch_env!(:social_content_generator, Oban)},
       # Start the Finch HTTP client for sending emails
       {Finch, name: SocialContentGenerator.Finch},
       # Start a worker by calling: SocialContentGenerator.Worker.start_link(arg)

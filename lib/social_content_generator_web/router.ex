@@ -14,10 +14,47 @@ defmodule SocialContentGeneratorWeb.Router do
     plug :accepts, ["json"]
   end
 
+  pipeline :auth do
+    plug SocialContentGeneratorWeb.Plugs.Auth
+  end
+
   scope "/", SocialContentGeneratorWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    get "/", SessionController, :login
+    get "/login", SessionController, :login
+    delete "/logout", SessionController, :delete
+
+    # Google OAuth for authentication
+    get "/auth/google", OAuthController, :google_auth
+    get "/auth/google/callback", OAuthController, :google_callback
+  end
+
+  scope "/", SocialContentGeneratorWeb do
+    pipe_through [:browser, :auth]
+
+    get "/settings", SettingsController, :index
+    get "/settings/automations", SettingsController, :automations
+    get "/settings/automations/new", SettingsController, :new_automation
+    post "/settings/automations", SettingsController, :create_automation
+    get "/settings/automations/:id/edit", SettingsController, :edit_automation
+    put "/settings/automations/:id", SettingsController, :update_automation
+    delete "/settings/automations/:id", SettingsController, :delete_automation
+
+    # OAuth routes
+    get "/auth/linkedin/callback", OAuthController, :linkedin_callback
+    get "/auth/facebook/callback", OAuthController, :facebook_callback
+
+    # Auth initiation routes
+    get "/settings/linkedin/auth", SettingsController, :linkedin_auth
+    get "/settings/facebook/auth", SettingsController, :facebook_auth
+
+    # Meeting routes
+    resources "/meetings", MeetingController, only: [:index, :show, :create]
+
+    post "/meetings/:meeting_id/automations/:automation_id/generate_post",
+         MeetingController,
+         :generate_post
   end
 
   # Other scopes may use custom stacks.
@@ -25,7 +62,7 @@ defmodule SocialContentGeneratorWeb.Router do
   #   pipe_through :api
   # end
 
-  # Enable LiveDashboard and Swoosh mailbox preview in development
+  # Enable LiveDashboard in development
   if Application.compile_env(:social_content_generator, :dev_routes) do
     # If you want to use the LiveDashboard in production, you should put
     # it behind authentication and allow only admins to access it.
@@ -38,7 +75,6 @@ defmodule SocialContentGeneratorWeb.Router do
       pipe_through :browser
 
       live_dashboard "/dashboard", metrics: SocialContentGeneratorWeb.Telemetry
-      forward "/mailbox", Plug.Swoosh.MailboxPreview
     end
   end
 end

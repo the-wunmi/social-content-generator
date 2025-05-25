@@ -11,6 +11,26 @@ config :social_content_generator,
   ecto_repos: [SocialContentGenerator.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+# Configure your database
+config :social_content_generator, SocialContentGenerator.Repo,
+  username: System.get_env("POSTGRES_USER"),
+  password: System.get_env("POSTGRES_PASSWORD"),
+  hostname: System.get_env("POSTGRES_HOST"),
+  database: System.get_env("POSTGRES_DB"),
+  stacktrace: true,
+  show_sensitive_data_on_connection_error: true,
+  pool_size: 10
+
+# Configure Oban
+config :social_content_generator, Oban,
+  repo: SocialContentGenerator.Repo,
+  plugins: [
+    # 7 days
+    {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
+    {Oban.Plugins.Stager, interval: :timer.minutes(1)}
+  ],
+  queues: [default: 10, events: 20, media: 20, emails: 20]
+
 # Configures the endpoint
 config :social_content_generator, SocialContentGeneratorWeb.Endpoint,
   url: [host: "localhost"],
@@ -23,7 +43,18 @@ config :social_content_generator, SocialContentGeneratorWeb.Endpoint,
     layout: false
   ],
   pubsub_server: SocialContentGenerator.PubSub,
-  live_view: [signing_salt: "E2IM03LH"]
+  live_view: [signing_salt: "E2IM03LH"],
+  # Binding to loopback ipv4 address prevents access from other machines.
+  # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
+  http: [ip: {127, 0, 0, 1}, port: String.to_integer(System.get_env("PORT") || "4000")],
+  check_origin: false,
+  code_reloader: true,
+  debug_errors: true,
+  secret_key_base: "your_secret_key_base",
+  watchers: [
+    esbuild: {Esbuild, :install_and_run, [:default, ~w(--sourcemap=inline --watch)]},
+    tailwind: {Tailwind, :install_and_run, [:default, ~w(--watch)]}
+  ]
 
 # Configures the mailer
 #
@@ -32,7 +63,16 @@ config :social_content_generator, SocialContentGeneratorWeb.Endpoint,
 #
 # For production it's recommended to configure a different adapter
 # at the `config/runtime.exs`.
-config :social_content_generator, SocialContentGenerator.Mailer, adapter: Swoosh.Adapters.Local
+config :social_content_generator, SocialContentGenerator.Mailer,
+  adapter: Swoosh.Adapters.SMTP,
+  relay: System.get_env("SMTP_HOST", "smtp.gmail.com"),
+  port: String.to_integer(System.get_env("SMTP_PORT", "587")),
+  username: System.get_env("SMTP_USERNAME"),
+  password: System.get_env("SMTP_PASSWORD"),
+  ssl: false,
+  tls: :always,
+  auth: :always,
+  retries: 2
 
 # Configure esbuild (the version is required)
 config :esbuild,
@@ -63,6 +103,38 @@ config :logger, :console,
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
+
+# Set a higher stacktrace during development. Avoid configuring such
+# in production as building large stacktraces may be expensive.
+config :phoenix, :stacktrace_depth, 20
+
+# Initialize plugs at runtime for faster development compilation
+config :phoenix, :plug_init_mode, :runtime
+
+# Include HEEx debug annotations as HTML comments in rendered markup
+config :phoenix_live_view, :debug_heex_annotations, true
+
+# Disable swoosh api client as it is only required for production adapters.
+config :swoosh, :api_client, false
+
+# Watch static and templates for browser reloading.
+config :social_content_generator, SocialContentGeneratorWeb.Endpoint,
+  live_reload: [
+    patterns: [
+      ~r"priv/static/.*(js|css|png|jpeg|jpg|gif|svg)$",
+      ~r"priv/gettext/.*(po)$",
+      ~r"lib/social_content_generator_web/(controllers|live|components)/.*(ex|heex)$"
+    ]
+  ]
+
+# Enable dev routes for dashboard and mailbox
+config :social_content_generator, dev_routes: true
+
+# Do not include metadata nor timestamps in development logs
+config :logger, :console, format: "$time $metadata[$level] $message\n"
+
+# Configure Recall.ai
+config :social_content_generator, :recall_api_key, System.get_env("RECALL_API_KEY")
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

@@ -1,0 +1,50 @@
+<.header>
+  Meetings
+  <:subtitle>Your past and upcoming meetings</:subtitle>
+</.header>
+
+<div class="mt-8">
+  <div :if={@meetings == []} class="text-center py-12">
+    <p class="text-gray-500">No meetings found.</p>
+    <p class="text-sm text-gray-400 mt-2">Meetings will appear here after you connect your calendar and schedule meetings with Recall.ai bots.</p>
+  </div>
+  
+  <div :if={@meetings != []} class="grid gap-4">
+    <div :for={meeting <- @meetings} class="bg-white shadow rounded-lg p-6">
+      <div class="flex justify-between items-start">
+        <div>
+          <h3 class="text-lg font-medium text-gray-900">{meeting.title}</h3>
+          <p :if={meeting.start_time} class="text-sm text-gray-500 mt-1">
+            {Calendar.strftime(meeting.start_time, "%B %d, %Y at %I:%M %p")}
+          </p>
+          <p class="text-sm text-gray-600 mt-2">{meeting.description}</p>
+        </div>
+        <div class="flex space-x-2">
+          <.link navigate={~p"/meetings/#{meeting}"} class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+            View Details
+          </.link>
+        </div>
+      </div>
+      
+      <div class="mt-4 flex items-center space-x-4">
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+          {meeting.status || "scheduled"}
+        </span>
+        <span :if={meeting.meeting_url} class="text-xs text-gray-500">
+          <span :if={String.contains?(meeting.meeting_url, "zoom.us")}>
+            📹 Zoom
+          </span>
+          <span :if={String.contains?(meeting.meeting_url, "teams.microsoft.com")}>
+            🎥 Teams  
+          </span>
+          <span :if={String.contains?(meeting.meeting_url, "meet.google.com")}>
+            📞 Google Meet
+          </span>
+          <span :if={!String.contains?(meeting.meeting_url, "zoom.us") and !String.contains?(meeting.meeting_url, "teams.microsoft.com") and !String.contains?(meeting.meeting_url, "meet.google.com")}>
+            🔗 Meeting Link
+          </span>
+        </span>
+      </div>
+    </div>
+  </div>
+</div> 
