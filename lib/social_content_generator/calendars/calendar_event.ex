@@ -16,6 +16,7 @@ defmodule SocialContentGenerator.Calendars.CalendarEvent do
     field :deleted_at, :utc_datetime
 
     belongs_to :integration, SocialContentGenerator.Integrations.Integration
+    belongs_to :bot, SocialContentGenerator.Bots.Bot
     has_one :meeting, SocialContentGenerator.Meetings.Meeting
     has_many :attendees, SocialContentGenerator.Calendars.CalendarEventAttendee
 
@@ -36,10 +37,12 @@ defmodule SocialContentGenerator.Calendars.CalendarEvent do
       :note_taker_enabled,
       :join_offset_minutes,
       :integration_id,
+      :bot_id,
       :deleted_at
     ])
     |> validate_required([:integration_event_id, :title, :start_time, :end_time, :integration_id])
     |> foreign_key_constraint(:integration_id)
+    |> foreign_key_constraint(:bot_id)
     |> unique_constraint(:integration_event_id,
       name: :calendar_events_integration_event_id_unique_when_not_deleted
     )

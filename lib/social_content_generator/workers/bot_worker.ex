@@ -11,7 +11,7 @@ defmodule SocialContentGenerator.Workers.BotWorker do
   alias SocialContentGenerator.Services.Recall
   alias SocialContentGenerator.Repo
   alias SocialContentGenerator.Bots.Bot
-  alias SocialContentGenerator.Meetings.{Meeting, MeetingAttendee}
+  alias SocialContentGenerator.Meetings.MeetingAttendee
   import Ecto.Query
   require Logger
 
@@ -22,110 +22,47 @@ defmodule SocialContentGenerator.Workers.BotWorker do
         Logger.warning("Bot #{bot_id} not found for polling")
         {:cancel, "Bot not found"}
 
-      %Bot{integration_bot_id: integration_bot_id} = bot ->
-        poll_bot_status(bot, integration_bot_id)
-    end
-  end
+      %Bot{integration_bot_id: integration_bot_id, join_at: join_at} = bot ->
+        now = DateTime.utc_now()
 
-  def perform(%Oban.Job{args: %{"action" => "create_bot", "meeting_id" => meeting_id}}) do
-    case Meetings.get_meeting(meeting_id) do
-      nil ->
-        Logger.warning("Meeting #{meeting_id} not found for bot creation")
-        {:cancel, "Meeting not found"}
+        # Only start polling if it's time to join or past join time
+        if join_at && DateTime.compare(now, join_at) == :lt do
+          Logger.info("Bot #{bot_id} not ready to join yet (join_at: #{join_at}), rescheduling")
 
-      meeting ->
-        create_bot_for_meeting(meeting)
+          # Reschedule for join time
+          %{action: "poll_bot", bot_id: bot.id}
+          |> new(scheduled_at: join_at)
+          |> Oban.insert()
+
+          :ok
+        else
+          poll_bot_status(bot, integration_bot_id)
+        end
     end
   end
 
   def perform(%Oban.Job{
-        args: %{
-          "action" => "create_meeting_and_bot",
-          "calendar_event_id" => calendar_event_id,
-          "user_integration_id" => user_integration_id
-        }
+        args: %{"action" => "create_bot", "calendar_event_id" => calendar_event_id}
       }) do
     alias SocialContentGenerator.Calendars
-    alias SocialContentGenerator.Users.UserIntegration
 
-    # Get the calendar event and user integration
-    calendar_event = Calendars.get_calendar_event(calendar_event_id)
-
-    user_integration =
-      Repo.get(UserIntegration, user_integration_id) |> Repo.preload([:user, :integration])
-
-    case {calendar_event, user_integration} do
-      {nil, _} ->
-        Logger.warning("Calendar event #{calendar_event_id} not found")
+    case Calendars.get_calendar_event(calendar_event_id) do
+      nil ->
+        Logger.warning("Calendar event #{calendar_event_id} not found for bot creation")
         {:cancel, "Calendar event not found"}
 
-      {_, nil} ->
-        Logger.warning("User integration #{user_integration_id} not found")
-        {:cancel, "User integration not found"}
-
-      {event, ui} ->
-        # Check if meeting already exists
-        case Meetings.get_meeting(calendar_event_id: event.id) do
-          nil ->
-            # Create meeting and bot
-            case Meetings.create_meeting(%{
-                   calendar_event_id: event.id,
-                   user_id: ui.user_id,
-                   integration_id: ui.integration_id,
-                   status: "scheduled"
-                 }) do
-              {:ok, meeting} ->
-                Logger.info(
-                  "Created meeting #{meeting.id} for calendar event #{event.id} (scheduled creation)"
-                )
-
-                create_bot_for_meeting(meeting)
-
-              {:error, reason} ->
-                Logger.error(
-                  "Failed to create scheduled meeting for event #{event.id}: #{inspect(reason)}"
-                )
-
-                {:error, reason}
-            end
-
-          existing_meeting ->
-            # Meeting exists, just create bot if needed
-            if is_nil(existing_meeting.bot_id) do
-              create_bot_for_meeting(existing_meeting)
-            else
-              Logger.info("Meeting #{existing_meeting.id} already has bot, skipping")
-              :ok
-            end
-        end
+      calendar_event ->
+        create_bot_for_calendar_event(calendar_event)
     end
   end
 
   defp poll_bot_status(%Bot{} = bot, integration_bot_id) do
     case Recall.poll_bot_status(integration_bot_id) do
       {:ok, %{status: "done", transcript: transcript} = bot_data} ->
-        # Meeting is complete, update meeting and bot
-        Logger.info("Bot #{bot.id} completed, updating meeting with transcript")
+        # Bot is complete, create meeting now
+        Logger.info("Bot #{bot.id} completed, creating meeting with transcript")
 
-        meeting = Repo.preload(bot, :meetings) |> Map.get(:meetings) |> List.first()
-
-        if meeting do
-          # Update meeting with transcript and completion status
-          Meetings.update_meeting(meeting, %{
-            transcript: transcript,
-            status: "completed"
-          })
-
-          # Store attendees from bot data
-          store_meeting_attendees(meeting, bot_data.meeting_participants)
-
-          # Update bot status
-          Bot.changeset(bot, %{status: "inactive"})
-          |> Repo.update()
-
-          # Trigger automation processing
-          schedule_automation_processing(meeting)
-        end
+        create_meeting_for_completed_bot(bot, transcript, bot_data.meeting_participants)
 
         :ok
 
@@ -140,7 +77,7 @@ defmodule SocialContentGenerator.Workers.BotWorker do
 
         :ok
 
-      {:ok, %{status: status}} when status in ["joining_call", "in_waiting_room"] ->
+      {:ok, %{status: status}} when status in ["joining_call", "in_waiting_room", "scheduled"] ->
         # Bot is joining, check more frequently
         Logger.debug("Bot #{bot.id} joining meeting, status: #{status}")
 
@@ -157,32 +94,80 @@ defmodule SocialContentGenerator.Workers.BotWorker do
         Bot.changeset(bot, %{status: "inactive"})
         |> Repo.update()
 
-        # Update associated meeting status
-        meeting = Repo.preload(bot, :meetings) |> Map.get(:meetings) |> List.first()
-
-        if meeting do
-          Meetings.update_meeting(meeting, %{status: "failed"})
-        end
-
         {:error, reason}
     end
   end
 
-  defp create_bot_for_meeting(meeting) do
-    meeting = Repo.preload(meeting, [:calendar_event, :integration, :user])
-    calendar_event = meeting.calendar_event
+  defp create_meeting_for_completed_bot(bot, transcript, participants) do
+    # Get the calendar event associated with this bot
+    bot = Repo.preload(bot, [:calendar_events])
+    calendar_event = List.first(bot.calendar_events)
+
+    if calendar_event do
+      calendar_event = Repo.preload(calendar_event, [:integration])
+
+      # Find the user who owns this integration
+      user_integration =
+        from(ui in SocialContentGenerator.Users.UserIntegration,
+          where: ui.integration_id == ^calendar_event.integration_id,
+          preload: [:user]
+        )
+        |> Repo.one()
+
+      if user_integration do
+        # Create meeting with the bot_id and transcript
+        case Meetings.create_meeting(%{
+               calendar_event_id: calendar_event.id,
+               user_id: user_integration.user_id,
+               integration_id: calendar_event.integration_id,
+               bot_id: bot.id,
+               transcript: transcript,
+               status: "completed"
+             }) do
+          {:ok, meeting} ->
+            Logger.info("Created meeting #{meeting.id} for completed bot #{bot.id}")
+
+            # Store attendees from bot data
+            store_meeting_attendees(meeting, participants)
+
+            # Update bot status
+            Bot.changeset(bot, %{status: "inactive"})
+            |> Repo.update()
+
+            # Trigger automation processing
+            schedule_automation_processing(meeting)
+
+          {:error, reason} ->
+            Logger.error(
+              "Failed to create meeting for completed bot #{bot.id}: #{inspect(reason)}"
+            )
+        end
+      else
+        Logger.error("No user integration found for calendar event #{calendar_event.id}")
+      end
+    else
+      Logger.error("No calendar event found for bot #{bot.id}")
+    end
+  end
+
+  defp create_bot_for_calendar_event(calendar_event) do
+    alias SocialContentGenerator.Calendars
+    calendar_event = Repo.preload(calendar_event, [:integration])
 
     case calendar_event.meeting_url do
       nil ->
-        Logger.warning("No meeting URL found for meeting #{meeting.id}")
-        Meetings.update_meeting(meeting, %{status: "failed"})
+        Logger.warning("No meeting URL found for calendar event #{calendar_event.id}")
         {:error, "No meeting URL"}
 
       meeting_url ->
-        join_offset = get_join_offset_minutes(calendar_event, meeting.user)
+        # Get join offset from calendar event or default
+        join_offset = calendar_event.join_offset_minutes || 5
 
         case Recall.create_bot_for_calendar_event(calendar_event, join_offset) do
           {:ok, bot_data} ->
+            # Calculate join time
+            join_at = DateTime.add(calendar_event.start_time, -join_offset * 60, :second)
+
             # Create bot record
             {:ok, bot} =
               %Bot{}
@@ -190,32 +175,31 @@ defmodule SocialContentGenerator.Workers.BotWorker do
                 name: bot_data.name,
                 integration_bot_id: bot_data.integration_bot_id,
                 status: bot_data.status,
+                join_at: join_at,
                 configuration: %{
                   recall_status: bot_data.recall_status,
                   join_offset_minutes: join_offset,
                   meeting_platform: Recall.extract_meeting_platform(meeting_url)
                 },
-                integration_id: meeting.integration_id
+                integration_id: calendar_event.integration_id
               })
               |> Repo.insert()
 
-            # Update meeting with bot
-            Meetings.update_meeting(meeting, %{
-              bot_id: bot.id,
-              status: "scheduled"
-            })
+            Calendars.update_calendar_event(calendar_event, %{bot_id: bot.id})
 
-            # Schedule polling
+            # Schedule polling to start at join time
             %{action: "poll_bot", bot_id: bot.id}
-            |> new(schedule_in: 60)
+            |> new(scheduled_at: join_at)
             |> Oban.insert()
 
-            Logger.info("Created bot #{bot.id} for meeting #{meeting.id}")
+            Logger.info("Created bot #{bot.id} for calendar event #{calendar_event.id}")
             :ok
 
           {:error, reason} ->
-            Logger.error("Failed to create bot for meeting #{meeting.id}: #{reason}")
-            Meetings.update_meeting(meeting, %{status: "failed"})
+            Logger.error(
+              "Failed to create bot for calendar event #{calendar_event.id}: #{reason}"
+            )
+
             {:error, reason}
         end
     end

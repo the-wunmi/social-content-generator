@@ -45,7 +45,7 @@ defmodule SocialContentGenerator.Services.Recall do
            name: bot_config.bot_name,
            integration_bot_id: response["id"],
            status: "active",
-           recall_status: response["status_changes"] |> List.last() |> Map.get("code", "unknown")
+           recall_status: get_latest_status_code(response, "unknown")
          }}
 
       {:ok, %{status_code: status_code, body: response_body}} ->
@@ -71,10 +71,7 @@ defmodule SocialContentGenerator.Services.Recall do
         {:ok, response} = Jason.decode(response_body)
 
         # Get the latest status from status_changes
-        latest_status =
-          response["status_changes"]
-          |> List.last()
-          |> Map.get("code", "unknown")
+        latest_status = get_latest_status_code(response, "scheduled")
 
         {:ok,
          %{
@@ -164,7 +161,8 @@ defmodule SocialContentGenerator.Services.Recall do
         # Call ended but processing not complete yet
         {:ok, bot_data}
 
-      {:ok, %{status: status} = bot_data} when status in ["joining_call", "in_waiting_room"] ->
+      {:ok, %{status: status} = bot_data}
+      when status in ["joining_call", "in_waiting_room", "scheduled"] ->
         # Bot is joining or waiting
         {:ok, bot_data}
 
@@ -203,14 +201,21 @@ defmodule SocialContentGenerator.Services.Recall do
     join_offset = join_offset_minutes || ApiClient.bot_join_offset_minutes()
     join_at = DateTime.add(start_time, -join_offset * 60, :second)
 
-    # Only schedule if the join time is in the future
-    opts =
-      if DateTime.compare(join_at, DateTime.utc_now()) == :gt do
-        [join_at: join_at, bot_name: "Social Content Generator Bot - #{event.title || "Meeting"}"]
-      else
-        [bot_name: "Social Content Generator Bot - #{event.title || "Meeting"}"]
-      end
+    create_bot(meeting_url,
+      join_at: join_at,
+      bot_name: "Social Content Generator Bot - #{event.title || "Meeting"}"
+    )
+  end
 
-    create_bot(meeting_url, opts)
+  # Helper function to safely get the latest status code from status_changes array
+  defp get_latest_status_code(response, default) do
+    case List.last(response["status_changes"]) do
+      nil ->
+        # If empty and has join_at, it's scheduled
+        if Map.has_key?(response, "join_at"), do: "scheduled", else: default
+
+      status_change ->
+        Map.get(status_change, "code", default)
+    end
   end
 end

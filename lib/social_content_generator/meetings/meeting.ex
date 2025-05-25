@@ -34,7 +34,7 @@ defmodule SocialContentGenerator.Meetings.Meeting do
       :integration_id,
       :deleted_at
     ])
-    |> validate_required([:calendar_event_id, :user_id, :integration_id])
+    |> validate_required([:calendar_event_id, :user_id, :bot_id, :integration_id])
     |> validate_inclusion(:status, @valid_statuses)
     |> foreign_key_constraint(:user_id)
     |> foreign_key_constraint(:bot_id)

@@ -8,10 +8,12 @@ defmodule SocialContentGenerator.Bots.Bot do
     field :integration_bot_id, :string
     field :status, :string
     field :configuration, :map
+    field :join_at, :utc_datetime
     field :deleted_at, :utc_datetime
 
     belongs_to :integration, SocialContentGenerator.Integrations.Integration
     has_many :meetings, SocialContentGenerator.Meetings.Meeting
+    has_many :calendar_events, SocialContentGenerator.Calendars.CalendarEvent
 
     timestamps()
   end
@@ -26,6 +28,7 @@ defmodule SocialContentGenerator.Bots.Bot do
       :integration_bot_id,
       :status,
       :configuration,
+      :join_at,
       :integration_id,
       :deleted_at
     ])

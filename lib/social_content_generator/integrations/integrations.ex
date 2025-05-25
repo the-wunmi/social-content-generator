@@ -182,9 +182,8 @@ defmodule SocialContentGenerator.Integrations do
   defp after_successful_upsert(other), do: other
 
   defp schedule_calendar_worker(%UserIntegration{} = user_integration) do
-    user_integration =
-      %{"user_integration_id" => user_integration.id}
-      |> CalendarWorker.new()
-      |> Oban.insert()
+    %{"user_integration_id" => user_integration.id}
+    |> CalendarWorker.new()
+    |> Oban.insert()
   end
 end

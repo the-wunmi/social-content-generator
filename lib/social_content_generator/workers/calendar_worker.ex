@@ -7,12 +7,12 @@ defmodule SocialContentGenerator.Workers.CalendarWorker do
 
   use Oban.Worker,
     queue: :calendar,
-    max_attempts: 3,
-    unique: [period: 300, fields: [:args]]
+    max_attempts: 3
+
+  # unique: [period: 300, fields: [:args]]
 
   alias SocialContentGenerator.Users.UserIntegration
   alias SocialContentGenerator.Calendars.GoogleCalendar
-  alias SocialContentGenerator.Meetings
   alias SocialContentGenerator.Workers.BotWorker
   alias SocialContentGenerator.Repo
   import Ecto.Query
@@ -69,7 +69,6 @@ defmodule SocialContentGenerator.Workers.CalendarWorker do
           "Error fetching calendar events for user_integration #{user_integration.id}: #{reason}"
         )
 
-        # Use attempt number for exponential backoff instead of user_integration.id
         # This ensures proper backoff progression
         attempt = System.system_time(:second) |> rem(3)
 
@@ -112,102 +111,46 @@ defmodule SocialContentGenerator.Workers.CalendarWorker do
     user_integration = Repo.preload(user_integration, [:user, :integration])
     now = DateTime.utc_now()
 
-    IO.inspect(user_integration)
-
-    # Find events with meeting URLs that need bots and are starting soon
+    # Find events with meeting URLs that need bots
     events_needing_bots =
       Enum.filter(events, fn event ->
-        # Event is in the future but within the next 2 hours (to catch events starting soon)
+        # Event is in the future and has meeting URL and note taker enabled
+        # Only if bot doesn't already exist
         event.meeting_url != nil and
           event.note_taker_enabled == true and
           DateTime.compare(event.start_time, now) == :gt and
-          DateTime.diff(event.start_time, now, :second) <= 7200
+          is_nil(event.bot_id)
       end)
 
-    IO.inspect(events_needing_bots)
+    Logger.info("Found #{length(events_needing_bots)} events needing bots")
 
     Enum.each(events_needing_bots, fn event ->
-      # Check if meeting already exists
-      Logger.info("do we need bots")
+      # Calculate when to create the bot (join_offset minutes before start)
+      join_offset_minutes = get_join_offset_minutes(event, user_integration.user)
+      bot_creation_time = DateTime.add(event.start_time, -join_offset_minutes * 60, :second)
 
-      case Meetings.get_meeting(calendar_event_id: event.id) do
-        nil ->
-          # Calculate when to create the meeting and bot (join_offset minutes before start)
-          join_offset_minutes = get_join_offset_minutes(event, user_integration.user)
-          bot_creation_time = DateTime.add(event.start_time, -join_offset_minutes * 60, :second)
-
-          Logger.info("no meeting:::")
-
-          if DateTime.compare(bot_creation_time, now) != :gt do
-            # Time to create meeting and bot now
-            create_meeting_and_bot_now(event, user_integration)
-          else
-            # Schedule meeting and bot creation for later
-            schedule_meeting_and_bot_creation(event, user_integration, bot_creation_time)
-          end
-
-        existing_meeting ->
-          Logger.info("1 meeting:::")
-
-          IO.inspect(existing_meeting)
-          # Meeting exists, check if we need to create bot
-          if is_nil(existing_meeting.bot_id) do
-            join_offset_minutes = get_join_offset_minutes(event, user_integration.user)
-            bot_creation_time = DateTime.add(event.start_time, -join_offset_minutes * 60, :second)
-
-            IO.inspect(join_offset_minutes)
-            IO.inspect(bot_creation_time)
-
-            if DateTime.compare(bot_creation_time, now) != :gt do
-              # Time to create bot now
-              BotWorker.new(%{action: "create_bot", meeting_id: existing_meeting.id})
-              |> Oban.insert()
-            else
-              # Schedule bot creation for later
-              BotWorker.new(%{action: "create_bot", meeting_id: existing_meeting.id})
-              |> Oban.insert(scheduled_at: bot_creation_time)
-            end
-          end
+      if DateTime.compare(bot_creation_time, now) != :gt do
+        # Time to create bot now
+        create_bot_now(event)
+      else
+        # Schedule bot creation for later
+        schedule_bot_creation(event, bot_creation_time)
       end
     end)
   end
 
-  defp create_meeting_and_bot_now(event, user_integration) do
-    Logger.info("ermmmm")
+  defp create_bot_now(event) do
+    Logger.info("Creating bot for calendar event #{event.id}")
 
-    case Meetings.create_meeting(%{
-           calendar_event_id: event.id,
-           user_id: user_integration.user_id,
-           integration_id: user_integration.integration_id,
-           status: "scheduled"
-         }) do
-      {:ok, meeting} ->
-        Logger.info(
-          "Created meeting #{meeting.id} for calendar event #{event.id} (meeting starting soon)"
-        )
-
-        # Create bot immediately
-        BotWorker.new(%{action: "create_bot", meeting_id: meeting.id})
-        |> Oban.insert()
-
-      {:error, reason} ->
-        Logger.error("Failed to create meeting for event #{event.id}: #{inspect(reason)}")
-    end
+    BotWorker.new(%{action: "create_bot", calendar_event_id: event.id})
+    |> Oban.insert()
   end
 
-  defp schedule_meeting_and_bot_creation(event, user_integration, scheduled_time) do
-    # Schedule a job to create the meeting and bot at the right time
-    Logger.info("scheduling", event, user_integration, scheduled_time)
+  defp schedule_bot_creation(event, scheduled_time) do
+    Logger.info("Scheduling bot creation for event #{event.id} at #{scheduled_time}")
 
-    %{
-      action: "create_meeting_and_bot",
-      calendar_event_id: event.id,
-      user_integration_id: user_integration.id
-    }
-    |> BotWorker.new(scheduled_at: scheduled_time)
-    |> Oban.insert()
-
-    Logger.info("Scheduled meeting and bot creation for event #{event.id} at #{scheduled_time}")
+    BotWorker.new(%{action: "create_bot", calendar_event_id: event.id})
+    |> Oban.insert(scheduled_at: scheduled_time)
   end
 
   defp get_join_offset_minutes(event, user) do
