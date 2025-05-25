@@ -7,6 +7,9 @@
     </div>
     <div class="flex items-center gap-4 font-semibold leading-6 text-zinc-900">
       <%= if assigns[:current_user] do %>
+        <.link navigate={~p"/calendar"} class="hover:text-zinc-700">
+          Calendar
+        </.link>
         <.link navigate={~p"/meetings"} class="hover:text-zinc-700">
           Meetings
         </.link>

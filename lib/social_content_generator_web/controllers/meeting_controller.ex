@@ -34,6 +34,7 @@ defmodule SocialContentGeneratorWeb.MeetingController do
                 # Queue the first polling job that will watch this meeting until it completes.
                 %{meeting_id: updated_meeting.id}
                 |> MeetingWorker.new()
+                # TODO move away from controller
                 |> Oban.insert()
 
                 conn

@@ -49,6 +49,12 @@ defmodule SocialContentGeneratorWeb.Router do
     get "/settings/linkedin/auth", SettingsController, :linkedin_auth
     get "/settings/facebook/auth", SettingsController, :facebook_auth
 
+    # Calendar routes
+    get "/calendar", CalendarController, :index
+    get "/calendar/google", CalendarController, :connect_google_calendar
+    get "/calendar/google/callback", CalendarController, :google_calendar_callback
+    patch "/calendar/events/:id", CalendarController, :update
+
     # Meeting routes
     resources "/meetings", MeetingController, only: [:index, :show, :create]
 

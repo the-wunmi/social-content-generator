@@ -5,15 +5,19 @@ defmodule SocialContentGenerator.Services.OAuth do
 
   alias SocialContentGenerator.Services.ApiClient
 
-  def google_auth_url(redirect_uri \\ nil) do
+  def google_auth_url(redirect_uri \\ nil, scope_type \\ :auth) do
     google_config = ApiClient.oauth_config(:google)
     client_id = google_config[:client_id]
     redirect_uri = redirect_uri || google_config[:redirect_uri]
 
-    IO.inspect(google_config)
-
     scope =
-      "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
+      case scope_type do
+        :auth ->
+          "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
+
+        :calendar ->
+          "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
+      end
 
     "https://accounts.google.com/o/oauth2/v2/auth?" <>
       URI.encode_query(%{
@@ -157,16 +161,16 @@ defmodule SocialContentGenerator.Services.OAuth do
     end
   end
 
-  def refresh_token(integration) do
-    case integration.provider do
-      "google" -> refresh_google_token(integration)
-      "linkedin" -> refresh_linkedin_token(integration)
-      "facebook" -> refresh_facebook_token(integration)
+  def refresh_token(user_integration) do
+    case user_integration.integration.provider do
+      "google" -> refresh_google_token(user_integration)
+      "linkedin" -> refresh_linkedin_token(user_integration)
+      "facebook" -> refresh_facebook_token(user_integration)
       _ -> {:error, "Unsupported provider"}
     end
   end
 
-  defp refresh_google_token(integration) do
+  defp refresh_google_token(user_integration) do
     google_config = ApiClient.oauth_config(:google)
     client_id = google_config[:client_id]
     client_secret = google_config[:client_secret]
@@ -175,7 +179,7 @@ defmodule SocialContentGenerator.Services.OAuth do
       URI.encode_query(%{
         client_id: client_id,
         client_secret: client_secret,
-        refresh_token: integration.refresh_token,
+        refresh_token: user_integration.refresh_token,
         grant_type: "refresh_token"
       })
 
@@ -193,7 +197,7 @@ defmodule SocialContentGenerator.Services.OAuth do
     end
   end
 
-  defp refresh_linkedin_token(integration) do
+  defp refresh_linkedin_token(user_integration) do
     linkedin_config = ApiClient.oauth_config(:linkedin)
     client_id = linkedin_config[:client_id]
     client_secret = linkedin_config[:client_secret]
@@ -201,7 +205,7 @@ defmodule SocialContentGenerator.Services.OAuth do
     body =
       URI.encode_query(%{
         grant_type: "refresh_token",
-        refresh_token: integration.refresh_token,
+        refresh_token: user_integration.refresh_token,
         client_id: client_id,
         client_secret: client_secret
       })
@@ -220,7 +224,7 @@ defmodule SocialContentGenerator.Services.OAuth do
     end
   end
 
-  defp refresh_facebook_token(integration) do
+  defp refresh_facebook_token(user_integration) do
     facebook_config = ApiClient.oauth_config(:facebook)
     client_id = facebook_config[:client_id]
     client_secret = facebook_config[:client_secret]
@@ -230,7 +234,7 @@ defmodule SocialContentGenerator.Services.OAuth do
         grant_type: "fb_exchange_token",
         client_id: client_id,
         client_secret: client_secret,
-        fb_exchange_token: integration.access_token
+        fb_exchange_token: user_integration.access_token
       })
 
     case HTTPoison.get("https://graph.facebook.com/v18.0/oauth/access_token?#{body}") do

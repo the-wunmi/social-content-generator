@@ -43,7 +43,7 @@ config :phoenix_live_view,
 
 # Configure Oban for testing (disable background jobs)
 config :social_content_generator, Oban,
-  testing: :inline,
+  # testing: :inline,
   queues: false,
   plugins: false
 

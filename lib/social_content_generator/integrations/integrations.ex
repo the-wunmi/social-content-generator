@@ -158,7 +158,11 @@ defmodule SocialContentGenerator.Integrations do
   end
 
   def create_user_integration(attrs \\ %{}),
-    do: %UserIntegration{} |> UserIntegration.changeset(attrs) |> Repo.insert()
+    do:
+      %UserIntegration{}
+      |> UserIntegration.changeset(attrs)
+      |> Repo.insert()
+      |> after_successful_upsert()
 
   def update_user_integration(%UserIntegration{} = user_integration, attrs) do
     user_integration
@@ -171,15 +175,16 @@ defmodule SocialContentGenerator.Integrations do
   # Internal helpers
   # ---------------------------------------------------------------------------
   defp after_successful_upsert({:ok, ui} = result) do
-    schedule_calendar_worker(ui.integration_id)
+    schedule_calendar_worker(ui)
     result
   end
 
   defp after_successful_upsert(other), do: other
 
-  defp schedule_calendar_worker(integration_id) do
-    %{integration_id: integration_id}
-    |> CalendarWorker.new()
-    |> Oban.insert()
+  defp schedule_calendar_worker(%UserIntegration{} = user_integration) do
+    user_integration =
+      %{"user_integration_id" => user_integration.id}
+      |> CalendarWorker.new()
+      |> Oban.insert()
   end
 end

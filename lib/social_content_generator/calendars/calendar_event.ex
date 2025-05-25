@@ -7,8 +7,8 @@ defmodule SocialContentGenerator.Calendars.CalendarEvent do
     field :integration_event_id, :string
     field :title, :string
     field :description, :string
-    field :start_time, :utc_datetime
-    field :end_time, :utc_datetime
+    field :start_time, :utc_datetime_usec
+    field :end_time, :utc_datetime_usec
     field :location, :string
     field :meeting_url, :string
     field :note_taker_enabled, :boolean, default: false
@@ -40,5 +40,8 @@ defmodule SocialContentGenerator.Calendars.CalendarEvent do
     ])
     |> validate_required([:integration_event_id, :title, :start_time, :end_time, :integration_id])
     |> foreign_key_constraint(:integration_id)
+    |> unique_constraint(:integration_event_id,
+      name: :calendar_events_integration_event_id_unique_when_not_deleted
+    )
   end
 end
