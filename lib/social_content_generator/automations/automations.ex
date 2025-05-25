@@ -6,8 +6,8 @@ defmodule SocialContentGenerator.Automations do
 
   @valid_filters [:id, :user_id, :trigger_type, :action_type, :is_active, :deleted_at]
 
-  @spec get_automation(number()) :: %Automation{} | nil
-  def get_automation(id) when is_number(id) do
+  @spec get_automation(binary() | number()) :: %Automation{} | nil
+  def get_automation(id) when is_binary(id) or is_number(id) do
     Automation.not_deleted(Automation)
     |> where(id: ^id)
     |> Repo.one()

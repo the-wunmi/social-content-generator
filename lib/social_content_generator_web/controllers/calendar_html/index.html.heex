@@ -238,7 +238,7 @@
                   </div>
                 <% end %>
 
-                <%= if event.meeting_url do %>
+                <%= if event.meeting_url && DateTime.compare(event.end_time, DateTime.utc_now()) != :lt do %>
                   <div class="mt-3">
                     <.link
                       href={event.meeting_url}
@@ -264,41 +264,24 @@
                 <% end %>
               </div>
               
-<!-- Note Taker Toggle -->
+              <!-- Note Taker Toggle -->
               <%= if event.meeting_url do %>
+                <% is_past_event = DateTime.compare(event.end_time, DateTime.utc_now()) == :lt %>
                 <div class="ml-6 flex-shrink-0">
                   <div class="flex items-center">
                     <label class="text-sm font-medium text-gray-700 mr-3">
                       Note Taker
                     </label>
-                    <.form
-                      :let={_f}
-                      for={%{}}
-                      as={:calendar_event}
-                      action={~p"/calendar/events/#{event.id}"}
-                      method="patch"
-                      class="flex items-center"
-                    >
-                      <button
-                        type="submit"
-                        name="calendar_event[note_taker_enabled]"
-                        value={if event.note_taker_enabled, do: "false", else: "true"}
-                        data-confirm={
-                          if event.note_taker_enabled,
-                            do: "Disable note taker for this meeting?",
-                            else: "Enable note taker for this meeting?"
-                        }
-                        class={[
-                          "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
-                          if(event.note_taker_enabled, do: "bg-green-600", else: "bg-gray-200")
-                        ]}
-                        role="switch"
-                        aria-checked={event.note_taker_enabled}
-                      >
+                    <%= if is_past_event do %>
+                      <!-- Disabled toggle for past events -->
+                      <div class={[
+                        "relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent opacity-50",
+                        if(event.note_taker_enabled, do: "bg-green-600", else: "bg-gray-200")
+                      ]}>
                         <span
                           aria-hidden="true"
                           class={[
-                            "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                            "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0",
                             if(event.note_taker_enabled,
                               do: "translate-x-5",
                               else: "translate-x-0"
@@ -306,8 +289,47 @@
                           ]}
                         >
                         </span>
-                      </button>
-                    </.form>
+                      </div>
+                    <% else %>
+                      <!-- Active toggle for future events -->
+                      <.form
+                        :let={_f}
+                        for={%{}}
+                        as={:calendar_event}
+                        action={~p"/calendar/events/#{event.id}"}
+                        method="patch"
+                        class="flex items-center"
+                      >
+                        <button
+                          type="submit"
+                          name="calendar_event[note_taker_enabled]"
+                          value={if event.note_taker_enabled, do: "false", else: "true"}
+                          data-confirm={
+                            if event.note_taker_enabled,
+                              do: "Disable note taker for this meeting?",
+                              else: "Enable note taker for this meeting?"
+                          }
+                          class={[
+                            "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
+                            if(event.note_taker_enabled, do: "bg-green-600", else: "bg-gray-200")
+                          ]}
+                          role="switch"
+                          aria-checked={event.note_taker_enabled}
+                        >
+                          <span
+                            aria-hidden="true"
+                            class={[
+                              "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                              if(event.note_taker_enabled,
+                                do: "translate-x-5",
+                                else: "translate-x-0"
+                              )
+                            ]}
+                          >
+                          </span>
+                        </button>
+                      </.form>
+                    <% end %>
                   </div>
                   <%= if event.note_taker_enabled do %>
                     <div class="mt-2 text-xs text-green-600 font-medium">

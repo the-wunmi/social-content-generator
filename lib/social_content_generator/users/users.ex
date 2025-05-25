@@ -18,8 +18,8 @@ defmodule SocialContentGenerator.Users do
     |> Repo.all()
   end
 
-  @spec get_user(number()) :: %User{} | nil
-  def get_user(id) when is_number(id) do
+  @spec get_user(binary() | number()) :: %User{} | nil
+  def get_user(id) when is_binary(id) or is_number(id) do
     User.not_deleted(User)
     |> where(id: ^id)
     |> Repo.one()

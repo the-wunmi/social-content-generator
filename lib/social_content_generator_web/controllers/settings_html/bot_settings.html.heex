@@ -1,0 +1,36 @@
+<.header>
+  Bot Settings
+  <:subtitle>Configure how your meeting bots behave</:subtitle>
+</.header>
+
+<div class="mt-8">
+  <.simple_form :let={f} for={@changeset} action={~p"/settings/bot"} method="put">
+    <div class="space-y-6">
+      <div>
+        <.input
+          field={f[:bot_join_offset_minutes]}
+          type="number"
+          label="Bot Join Offset (minutes)"
+          help="How many minutes before the meeting starts should the bot join? (1-60 minutes)"
+          min="1"
+          max="60"
+        />
+      </div>
+    </div>
+
+    <:actions>
+      <.button type="submit">Save Settings</.button>
+    </:actions>
+  </.simple_form>
+
+  <div class="mt-8 p-4 bg-blue-50 rounded-lg">
+    <h3 class="text-sm font-medium text-blue-800 mb-2">How it works</h3>
+    <ul class="text-sm text-blue-700 space-y-1">
+      <li>• Bots will join meetings this many minutes before they start</li>
+      <li>• This ensures the bot is ready when the meeting begins</li>
+      <li>• Joining too early may cause the bot to wait in empty rooms</li>
+      <li>• Joining too late may miss the beginning of the meeting</li>
+      <li>• Recommended: 3-5 minutes for most meetings</li>
+    </ul>
+  </div>
+</div> 

@@ -10,31 +10,29 @@ defmodule SocialContentGenerator.Calendars do
   alias SocialContentGenerator.Calendars.GoogleCalendar
 
   @doc """
-  Gets all upcoming calendar events for a user from the database.
+  Gets all calendar events for a user from the database.
   Automatically triggers smart background sync if data is stale, or immediate sync if force_refresh is true.
   """
-  def list_upcoming_events(user_id, opts \\ []) do
-    days_ahead = Keyword.get(opts, :days_ahead, 7)
+  def list_all_events(user_id, opts \\ []) do
     force_refresh = Keyword.get(opts, :force_refresh, false)
 
-    now = DateTime.utc_now()
-    future_date = DateTime.add(now, days_ahead * 24 * 60 * 60, :second)
-
     # Get user's Google Calendar integrations and events in one efficient query
-    {integrations, events} = get_user_calendar_data(user_id, now, future_date)
+    {integrations, events} = get_user_calendar_data(user_id)
 
     if force_refresh do
-      # Force immediate sync and return fresh events
-      fresh_events =
-        integrations
-        |> Enum.flat_map(fn user_integration ->
-          case GoogleCalendar.fetch_and_store_events(user_integration, now, future_date) do
-            {:ok, events} -> events
-            {:error, _reason} -> []
-          end
-        end)
-        |> Enum.sort_by(& &1.start_time, DateTime)
+      # Force immediate sync by calling CalendarWorker directly (ensures 100% consistency)
+      alias SocialContentGenerator.Workers.CalendarWorker
 
+      integrations
+      |> Enum.each(fn user_integration ->
+        # Create a fake Oban job and call perform directly
+        job = %Oban.Job{args: %{"user_integration_id" => user_integration.id}}
+        # TODO timeout after maybe 30s if slow, so handle events available already
+        CalendarWorker.perform(job)
+      end)
+
+      # After sync, get fresh events from database (same as normal flow)
+      {_integrations, fresh_events} = get_user_calendar_data(user_id)
       {:ok, fresh_events}
     else
       # Smart sync: only sync if data is stale
@@ -67,7 +65,7 @@ defmodule SocialContentGenerator.Calendars do
 
   # Private helper functions
 
-  defp get_user_calendar_data(user_id, start_time, end_time) do
+  defp get_user_calendar_data(user_id) do
     # Single query to get all user integrations with calendar scope
     integrations =
       Integrations.list_user_integrations(user_id: user_id)
@@ -77,20 +75,25 @@ defmodule SocialContentGenerator.Calendars do
 
     integration_ids = Enum.map(integrations, & &1.integration_id)
 
-    # Get events for the time range if we have integrations
+    # Get all events if we have integrations
     events =
       if Enum.empty?(integration_ids) do
         []
       else
         CalendarEvent.not_deleted(CalendarEvent)
         |> where([ce], ce.integration_id in ^integration_ids)
-        |> where([ce], ce.start_time >= ^start_time and ce.start_time <= ^end_time)
-        |> order_by([ce], ce.start_time)
+        |> order_by([ce], desc: ce.start_time)
         |> preload([:integration, :attendees])
         |> Repo.all()
       end
 
     {integrations, events}
+  end
+
+  # Helper functions for sync time ranges
+  defp get_sync_start_time do
+    # Fetch events from 30 days ago to capture recent past events
+    DateTime.utc_now() |> DateTime.add(-30 * 24 * 60 * 60, :second)
   end
 
   defp should_sync_calendar_data?(integrations) do
@@ -114,7 +117,8 @@ defmodule SocialContentGenerator.Calendars do
     |> Enum.each(fn user_integration ->
       %{"user_integration_id" => user_integration.id}
       # 1 minute delay
-      |> CalendarWorker.new(schedule_in: 60)
+      # TODO change to 60s
+      |> CalendarWorker.new(schedule_in: 5)
       |> Oban.insert()
     end)
   end

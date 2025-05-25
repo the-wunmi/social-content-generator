@@ -23,36 +23,17 @@ defmodule SocialContentGenerator.Workers.MeetingWorker do
         {:error, "Meeting not found or deleted"}
 
       meeting ->
-        case Recall.poll_bot_status(meeting.bot.integration_bot_id) do
-          {:ok, transcript} when is_binary(transcript) ->
-            # Update meeting with transcript
-            Meetings.update_meeting(meeting, %{
-              transcript: transcript,
-              status: "completed"
-            })
+        # This worker now only handles automation generation after meeting completion
+        # Bot polling is handled by BotWorker
+        if meeting.status == "completed" and meeting.transcript do
+          generate_automation_outputs(meeting)
+          :ok
+        else
+          Logger.warning(
+            "Meeting #{meeting_id} not ready for automation processing (status: #{meeting.status})"
+          )
 
-            # Generate social media posts and emails
-            generate_automation_outputs(meeting)
-
-            :ok
-
-          {:ok, _status} ->
-            # Meeting is still in progress, reschedule check
-            %{meeting_id: meeting_id}
-            |> new(schedule_in: 60)
-            |> Oban.insert()
-
-            :ok
-
-          {:error, reason} ->
-            # Log error and reschedule
-            IO.puts("Error polling meeting #{meeting_id}: #{reason}")
-
-            %{meeting_id: meeting_id}
-            |> new(schedule_in: 60)
-            |> Oban.insert()
-
-            :ok
+          :ok
         end
     end
   end

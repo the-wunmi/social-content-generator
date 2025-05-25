@@ -10,7 +10,7 @@ defmodule SocialContentGeneratorWeb.CalendarController do
     force_refresh = Map.get(params, "refresh") == "true"
 
     # Get events with smart sync or immediate refresh
-    case Calendars.list_upcoming_events(user_id, force_refresh: force_refresh) do
+    case Calendars.list_all_events(user_id, force_refresh: force_refresh) do
       {:ok, events} ->
         # Get connection info for UI
         google_calendar_integrations =
@@ -60,26 +60,33 @@ defmodule SocialContentGeneratorWeb.CalendarController do
         |> redirect(to: ~p"/calendar")
 
       event ->
-        # Convert string values to boolean for note_taker_enabled
-        normalized_params = normalize_event_params(event_params)
+        # Check if event is in the past
+        if DateTime.compare(event.end_time, DateTime.utc_now()) == :lt do
+          conn
+          |> put_flash(:error, "Cannot update past events")
+          |> redirect(to: ~p"/calendar")
+        else
+          # Convert string values to boolean for note_taker_enabled
+          normalized_params = normalize_event_params(event_params)
 
-        case Calendars.update_calendar_event(event, normalized_params) do
-          {:ok, updated_event} ->
-            message =
-              case normalized_params["note_taker_enabled"] do
-                true -> "Note taker enabled"
-                false -> "Note taker disabled"
-                _ -> "Event updated"
-              end
+          case Calendars.update_calendar_event(event, normalized_params) do
+            {:ok, updated_event} ->
+              message =
+                case normalized_params["note_taker_enabled"] do
+                  true -> "Note taker enabled"
+                  false -> "Note taker disabled"
+                  _ -> "Event updated"
+                end
 
-            conn
-            |> put_flash(:info, message)
-            |> redirect(to: ~p"/calendar")
+              conn
+              |> put_flash(:info, message)
+              |> redirect(to: ~p"/calendar")
 
-          {:error, _changeset} ->
-            conn
-            |> put_flash(:error, "Failed to update event")
-            |> redirect(to: ~p"/calendar")
+            {:error, _changeset} ->
+              conn
+              |> put_flash(:error, "Failed to update event")
+              |> redirect(to: ~p"/calendar")
+          end
         end
     end
   end

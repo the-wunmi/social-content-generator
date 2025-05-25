@@ -21,7 +21,7 @@ defmodule SocialContentGeneratorWeb.OAuthController do
       conn
       |> put_session(:user_id, user.id)
       |> put_flash(:info, "Successfully signed in with Google")
-      |> redirect(to: ~p"/settings")
+      |> redirect(to: ~p"/calendar")
     else
       {:error, reason} ->
         conn
@@ -36,12 +36,12 @@ defmodule SocialContentGeneratorWeb.OAuthController do
            create_or_update_user_integration(conn.assigns.current_user, "linkedin", token_data) do
       conn
       |> put_flash(:info, "Successfully connected to LinkedIn")
-      |> redirect(to: ~p"/settings")
+      |> redirect(to: ~p"/calendar")
     else
       {:error, reason} ->
         conn
         |> put_flash(:error, "Failed to connect to LinkedIn: #{reason}")
-        |> redirect(to: ~p"/settings")
+        |> redirect(to: ~p"/calendar")
     end
   end
 
@@ -51,12 +51,12 @@ defmodule SocialContentGeneratorWeb.OAuthController do
            create_or_update_user_integration(conn.assigns.current_user, "facebook", token_data) do
       conn
       |> put_flash(:info, "Successfully connected to Facebook")
-      |> redirect(to: ~p"/settings")
+      |> redirect(to: ~p"/calendar")
     else
       {:error, reason} ->
         conn
         |> put_flash(:error, "Failed to connect to Facebook: #{reason}")
-        |> redirect(to: ~p"/settings")
+        |> redirect(to: ~p"/calendar")
     end
   end
 

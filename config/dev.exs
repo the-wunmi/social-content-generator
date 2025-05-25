@@ -89,7 +89,7 @@ config :swoosh, :api_client, false
 config :social_content_generator, Oban,
   repo: SocialContentGenerator.Repo,
   plugins: [Oban.Plugins.Pruner],
-  queues: [calendar: 10, default: 10]
+  queues: [calendar: 10, default: 10, meetings: 10, bots: 10]
 
 # OAuth Configuration
 config :social_content_generator, :oauth,

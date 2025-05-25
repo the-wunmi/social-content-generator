@@ -16,7 +16,7 @@ defmodule SocialContentGenerator.Calendars.GoogleCalendar do
   @doc """
   Fetches events from Google Calendar API and stores them in the database.
   """
-  def fetch_and_store_events(%UserIntegration{} = user_integration, start_time, end_time) do
+  def fetch_and_store_events(%UserIntegration{} = user_integration, start_time) do
     headers = [
       {"Authorization", "Bearer #{user_integration.access_token}"},
       {"Content-Type", "application/json"}
@@ -25,7 +25,6 @@ defmodule SocialContentGenerator.Calendars.GoogleCalendar do
     params =
       URI.encode_query(%{
         timeMin: DateTime.to_iso8601(start_time),
-        timeMax: DateTime.to_iso8601(end_time),
         singleEvents: true,
         orderBy: "startTime"
       })
@@ -43,7 +42,7 @@ defmodule SocialContentGenerator.Calendars.GoogleCalendar do
         # Token expired, try to refresh
         case refresh_token_if_needed(user_integration) do
           {:ok, refreshed_integration} ->
-            fetch_and_store_events(refreshed_integration, start_time, end_time)
+            fetch_and_store_events(refreshed_integration, start_time)
 
           {:error, reason} ->
             {:error, "Authentication failed: #{reason}"}
@@ -64,10 +63,10 @@ defmodule SocialContentGenerator.Calendars.GoogleCalendar do
     user_integration =
       Integrations.get_user_integration(user_id: user_id, integration_id: integration_id)
 
-    now = DateTime.utc_now()
-    one_week_from_now = DateTime.add(now, 7 * 24 * 60 * 60, :second)
+    # Fetch events from 30 days ago onwards (no end limit)
+    start_time = DateTime.utc_now() |> DateTime.add(-30 * 24 * 60 * 60, :second)
 
-    fetch_and_store_events(user_integration, now, one_week_from_now)
+    fetch_and_store_events(user_integration, start_time)
   end
 
   defp upsert_calendar_event(event_data, integration_id) do

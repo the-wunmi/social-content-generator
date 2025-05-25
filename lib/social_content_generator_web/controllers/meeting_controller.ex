@@ -6,16 +6,33 @@ defmodule SocialContentGeneratorWeb.MeetingController do
   alias SocialContentGenerator.Services.Recall
   alias SocialContentGenerator.Social.SocialPost
   alias SocialContentGenerator.Workers.MeetingWorker
+  alias SocialContentGenerator.Repo
 
   def index(conn, _params) do
     user_id = conn.assigns.current_user.id
-    meetings = Meetings.list_meetings(user_id: user_id)
+
+    meetings =
+      Meetings.list_meetings(user_id: user_id)
+      |> Repo.preload([:calendar_event, :attendees, :bot])
+      |> Enum.sort_by(& &1.calendar_event.start_time, {:desc, DateTime})
+
     render(conn, :index, meetings: meetings)
   end
 
   def show(conn, %{"id" => id}) do
-    meeting = Meetings.get_meeting(id)
-    render(conn, :show, meeting: meeting)
+    meeting =
+      Meetings.get_meeting(id)
+      |> Repo.preload([:calendar_event, :attendees, :bot, :automation_outputs])
+
+    case meeting do
+      nil ->
+        conn
+        |> put_flash(:error, "Meeting not found")
+        |> redirect(to: ~p"/meetings")
+
+      meeting ->
+        render(conn, :show, meeting: meeting)
+    end
   end
 
   def generate_post(conn, %{"meeting_id" => meeting_id, "automation_id" => automation_id}) do

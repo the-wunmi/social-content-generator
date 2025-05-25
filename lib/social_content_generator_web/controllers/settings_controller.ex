@@ -4,6 +4,7 @@ defmodule SocialContentGeneratorWeb.SettingsController do
   alias SocialContentGenerator.Services.OAuth
   alias SocialContentGenerator.Integrations
   alias SocialContentGenerator.Automations
+  alias SocialContentGenerator.Users
 
   def index(conn, _params) do
     integrations =
@@ -77,5 +78,27 @@ defmodule SocialContentGeneratorWeb.SettingsController do
 
   def facebook_auth(conn, _params) do
     redirect(conn, external: OAuth.facebook_auth_url())
+  end
+
+  def bot_settings(conn, _params) do
+    user = conn.assigns.current_user
+    changeset = SocialContentGenerator.Users.User.changeset(user, %{})
+    render(conn, :bot_settings, user: user, changeset: changeset)
+  end
+
+  def update_bot_settings(conn, %{"user" => user_params}) do
+    user = conn.assigns.current_user
+
+    case Users.update_user(user, user_params) do
+      {:ok, _user} ->
+        conn
+        |> put_flash(:info, "Bot settings updated successfully.")
+        |> redirect(to: ~p"/settings/bot")
+
+      {:error, changeset} ->
+        conn
+        |> put_flash(:error, "Failed to update bot settings.")
+        |> render(:bot_settings, user: user, changeset: changeset)
+    end
   end
 end

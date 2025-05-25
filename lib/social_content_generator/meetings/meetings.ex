@@ -4,7 +4,16 @@ defmodule SocialContentGenerator.Meetings do
 
   alias SocialContentGenerator.Meetings.Meeting
 
-  @valid_filters [:id, :user_id, :title, :start_time, :end_time, :status, :deleted_at]
+  @valid_filters [
+    :id,
+    :user_id,
+    :title,
+    :start_time,
+    :end_time,
+    :status,
+    :calendar_event_id,
+    :deleted_at
+  ]
 
   @spec list_meetings() :: [%Meeting{}]
   def list_meetings, do: Repo.all(Meeting.not_deleted(Meeting))
@@ -18,8 +27,8 @@ defmodule SocialContentGenerator.Meetings do
     |> Repo.all()
   end
 
-  @spec get_meeting(number()) :: %Meeting{} | nil
-  def get_meeting(id) when is_number(id) do
+  @spec get_meeting(binary() | number()) :: %Meeting{} | nil
+  def get_meeting(id) when is_binary(id) or is_number(id) do
     Meeting.not_deleted(Meeting)
     |> where(id: ^id)
     |> Repo.one()

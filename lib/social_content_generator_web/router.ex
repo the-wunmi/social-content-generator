@@ -40,6 +40,8 @@ defmodule SocialContentGeneratorWeb.Router do
     get "/settings/automations/:id/edit", SettingsController, :edit_automation
     put "/settings/automations/:id", SettingsController, :update_automation
     delete "/settings/automations/:id", SettingsController, :delete_automation
+    get "/settings/bot", SettingsController, :bot_settings
+    put "/settings/bot", SettingsController, :update_bot_settings
 
     # OAuth routes
     get "/auth/linkedin/callback", OAuthController, :linkedin_callback
@@ -56,7 +58,7 @@ defmodule SocialContentGeneratorWeb.Router do
     patch "/calendar/events/:id", CalendarController, :update
 
     # Meeting routes
-    resources "/meetings", MeetingController, only: [:index, :show, :create]
+    resources "/meetings", MeetingController, only: [:index, :show]
 
     post "/meetings/:meeting_id/automations/:automation_id/generate_post",
          MeetingController,
