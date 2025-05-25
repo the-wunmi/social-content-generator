@@ -193,6 +193,29 @@ defmodule SocialContentGenerator.Services.Recall do
 
   def extract_meeting_platform(_), do: "unknown"
 
+  def delete_bot(bot_id) do
+    api_key = ApiClient.recall_api_key()
+
+    headers = [
+      {"Authorization", "Token #{api_key}"},
+      {"Content-Type", "application/json"}
+    ]
+
+    case HTTPoison.delete("#{@recall_api_url}/bot/#{bot_id}", headers) do
+      {:ok, %{status_code: 204}} ->
+        Logger.info("Successfully deleted recall bot: #{bot_id}")
+        :ok
+
+      {:ok, %{status_code: status_code, body: response_body}} ->
+        Logger.error("Failed to delete recall bot #{bot_id}: #{status_code} - #{response_body}")
+        {:error, "Failed to delete bot: #{status_code} - #{response_body}"}
+
+      {:error, %{reason: reason}} ->
+        Logger.error("Failed to delete recall bot #{bot_id}: #{reason}")
+        {:error, "Failed to delete bot: #{reason}"}
+    end
+  end
+
   # Convenience wrapper that accepts a calendar event struct
   def create_bot_for_calendar_event(
         %{meeting_url: meeting_url, start_time: start_time} = event,

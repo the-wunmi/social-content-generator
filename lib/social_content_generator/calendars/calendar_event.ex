@@ -46,5 +46,28 @@ defmodule SocialContentGenerator.Calendars.CalendarEvent do
     |> unique_constraint(:integration_event_id,
       name: :calendar_events_integration_event_id_unique_when_not_deleted
     )
+    |> maybe_schedule_bot_cleanup()
+  end
+
+  # Schedule bot cleanup if note_taker_enabled is being set to false and there's a bot
+  defp maybe_schedule_bot_cleanup(%Ecto.Changeset{} = changeset) do
+    note_taker_change = get_change(changeset, :note_taker_enabled)
+
+    # Only trigger cleanup if note_taker_enabled is being explicitly set to false
+    if note_taker_change == false do
+      # Get the calendar event ID (either from data or changes)
+      calendar_event_id = changeset.data.id || get_change(changeset, :id)
+
+      if calendar_event_id && changeset.data.bot_id do
+        # Schedule cleanup asynchronously to avoid blocking the changeset
+        Task.start(fn ->
+          SocialContentGenerator.Workers.BotWorker.cleanup_bot_for_calendar_event(
+            calendar_event_id
+          )
+        end)
+      end
+    end
+
+    changeset
   end
 end

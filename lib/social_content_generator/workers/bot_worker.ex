@@ -322,4 +322,91 @@ defmodule SocialContentGenerator.Workers.BotWorker do
       user.bot_join_offset_minutes ||
       Application.get_env(:social_content_generator, :bot)[:join_offset_minutes]
   end
+
+  @doc """
+  Cleans up a bot when note taker is disabled:
+  1. Cancels any scheduled poll jobs
+  2. Deletes the bot from Recall API
+  3. Soft deletes the bot in our database
+  """
+  def cleanup_bot_for_calendar_event(calendar_event_id) do
+    alias SocialContentGenerator.Calendars
+
+    case Calendars.get_calendar_event(calendar_event_id) do
+      %{bot_id: nil} ->
+        # No bot to clean up
+        :ok
+
+      %{bot_id: bot_id} = calendar_event ->
+        case Repo.get(Bot, bot_id) do
+          nil ->
+            # Bot already deleted, just clear the reference
+            Calendars.update_calendar_event(calendar_event, %{bot_id: nil})
+            :ok
+
+          %Bot{integration_bot_id: integration_bot_id, deleted_at: nil} = bot ->
+            Logger.info("Cleaning up bot #{bot_id} for calendar event #{calendar_event_id}")
+
+            # 1. Cancel scheduled poll jobs
+            cancel_scheduled_poll_jobs(bot_id)
+
+            # 2. Delete bot from Recall API
+            case Recall.delete_bot(integration_bot_id) do
+              :ok ->
+                Logger.info("Successfully deleted bot #{integration_bot_id} from Recall")
+
+              {:error, reason} ->
+                Logger.warning(
+                  "Failed to delete bot #{integration_bot_id} from Recall: #{reason}"
+                )
+
+                # Continue with soft delete even if Recall deletion fails
+            end
+
+            # 3. Soft delete the bot in our database
+            Bot.changeset(bot, %{deleted_at: DateTime.utc_now()})
+            |> Repo.update()
+
+            # 4. Clear bot reference from calendar event
+            Calendars.update_calendar_event(calendar_event, %{bot_id: nil})
+
+            Logger.info("Successfully cleaned up bot #{bot_id}")
+            :ok
+
+          %Bot{deleted_at: deleted_at} when not is_nil(deleted_at) ->
+            # Bot already soft deleted, just clear the reference
+            Calendars.update_calendar_event(calendar_event, %{bot_id: nil})
+            :ok
+        end
+
+      nil ->
+        Logger.warning("Calendar event #{calendar_event_id} not found for bot cleanup")
+        {:error, "Calendar event not found"}
+    end
+  end
+
+  defp cancel_scheduled_poll_jobs(bot_id) do
+    # Cancel any scheduled poll jobs for this bot using Oban's clean API
+    query =
+      from(j in Oban.Job,
+        where:
+          j.state in ["available", "scheduled"] and
+            j.queue == "bots" and
+            fragment(
+              "?->>'action' = ? AND ?->>'bot_id' = ?",
+              j.args,
+              "poll_bot",
+              j.args,
+              ^to_string(bot_id)
+            )
+      )
+
+    case Oban.cancel_all_jobs(query) do
+      {:ok, count} when count > 0 ->
+        Logger.info("Cancelled #{count} scheduled poll jobs for bot #{bot_id}")
+
+      {:ok, 0} ->
+        Logger.debug("No scheduled poll jobs found for bot #{bot_id}")
+    end
+  end
 end
