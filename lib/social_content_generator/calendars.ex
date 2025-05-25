@@ -65,28 +65,6 @@ defmodule SocialContentGenerator.Calendars do
     |> Repo.update()
   end
 
-  @doc """
-  Gets all calendar events for a user with note taker enabled.
-  """
-  def list_events_with_note_taker(user_id) do
-    # Get user's Google Calendar integrations
-    integration_ids =
-      Integrations.list_user_integrations(user_id: user_id)
-      |> Enum.filter(fn ui ->
-        ui.integration.provider == "google" and
-          "calendar" in ui.integration.scopes
-      end)
-      |> Enum.map(& &1.integration_id)
-
-    CalendarEvent.not_deleted(CalendarEvent)
-    |> where([ce], ce.integration_id in ^integration_ids)
-    |> where([ce], ce.note_taker_enabled == true)
-    |> where([ce], ce.start_time > ^DateTime.utc_now())
-    |> order_by([ce], ce.start_time)
-    |> preload([:integration, :attendees])
-    |> Repo.all()
-  end
-
   # Private helper functions
 
   defp get_user_calendar_data(user_id, start_time, end_time) do
