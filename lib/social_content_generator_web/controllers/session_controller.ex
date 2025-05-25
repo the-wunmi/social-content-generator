@@ -1,9 +1,6 @@
 defmodule SocialContentGeneratorWeb.SessionController do
   use SocialContentGeneratorWeb, :controller
 
-  alias SocialContentGenerator.Users
-  alias SocialContentGenerator.Auth.OAuth
-
   def login(conn, _params) do
     render(conn, :login)
   end

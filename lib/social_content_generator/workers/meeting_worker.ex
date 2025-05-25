@@ -7,7 +7,7 @@ defmodule SocialContentGenerator.Workers.MeetingWorker do
     queue: :meetings,
     max_attempts: 3
 
-  alias SocialContentGenerator.Meetings.Meeting
+  alias SocialContentGenerator.Meetings
   alias SocialContentGenerator.Services.Recall
   alias SocialContentGenerator.Services.SocialMedia
   alias SocialContentGenerator.Services.Email
@@ -18,40 +18,42 @@ defmodule SocialContentGenerator.Workers.MeetingWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"meeting_id" => meeting_id}}) do
-    meeting = Repo.get!(Meeting, meeting_id)
+    case Meetings.get_meeting(meeting_id) do
+      nil ->
+        {:error, "Meeting not found or deleted"}
 
-    case Recall.poll_bot_status(meeting.bot.integration_bot_id) do
-      {:ok, transcript} when is_binary(transcript) ->
-        # Update meeting with transcript
-        meeting
-        |> Meeting.changeset(%{
-          transcript: transcript,
-          status: "completed"
-        })
-        |> Repo.update()
+      meeting ->
+        case Recall.poll_bot_status(meeting.bot.integration_bot_id) do
+          {:ok, transcript} when is_binary(transcript) ->
+            # Update meeting with transcript
+            Meetings.update_meeting(meeting, %{
+              transcript: transcript,
+              status: "completed"
+            })
 
-        # Generate social media posts and emails
-        generate_automation_outputs(meeting)
+            # Generate social media posts and emails
+            generate_automation_outputs(meeting)
 
-        :ok
+            :ok
 
-      {:ok, status} ->
-        # Meeting is still in progress, reschedule check
-        %{meeting_id: meeting_id}
-        |> new(schedule_in: 60)
-        |> Oban.insert()
+          {:ok, _status} ->
+            # Meeting is still in progress, reschedule check
+            %{meeting_id: meeting_id}
+            |> new(schedule_in: 60)
+            |> Oban.insert()
 
-        :ok
+            :ok
 
-      {:error, reason} ->
-        # Log error and reschedule
-        IO.puts("Error polling meeting #{meeting_id}: #{reason}")
+          {:error, reason} ->
+            # Log error and reschedule
+            IO.puts("Error polling meeting #{meeting_id}: #{reason}")
 
-        %{meeting_id: meeting_id}
-        |> new(schedule_in: 60)
-        |> Oban.insert()
+            %{meeting_id: meeting_id}
+            |> new(schedule_in: 60)
+            |> Oban.insert()
 
-        :ok
+            :ok
+        end
     end
   end
 

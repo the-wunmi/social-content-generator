@@ -5,9 +5,7 @@ defmodule SocialContentGenerator.Calendars.GoogleCalendar do
 
   alias SocialContentGenerator.Calendars.CalendarEvent
   alias SocialContentGenerator.Calendars.CalendarEventAttendee
-  alias SocialContentGenerator.Integrations.Integration
   alias SocialContentGenerator.Repo
-  import Ecto.Query
 
   @google_calendar_api_url "https://www.googleapis.com/calendar/v3"
 
@@ -121,6 +119,6 @@ defmodule SocialContentGenerator.Calendars.GoogleCalendar do
 
   defp extract_meet_url(_), do: nil
 
-  defp parse_datetime(%{"dateTime" => date_time}), do: DateTime.from_iso8601!(date_time)
-  defp parse_datetime(%{"date" => date}), do: DateTime.from_iso8601!("#{date}T00:00:00Z")
+  defp parse_datetime(%{"dateTime" => date_time}), do: DateTime.from_iso8601(date_time)
+  defp parse_datetime(%{"date" => date}), do: DateTime.from_iso8601("#{date}T00:00:00Z")
 end

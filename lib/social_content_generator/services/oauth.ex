@@ -1,17 +1,16 @@
 defmodule SocialContentGenerator.Services.OAuth do
   @moduledoc """
-  Handles OAuth authentication for various social media platforms.
+  OAuth service for handling authentication with external providers.
   """
 
-  alias SocialContentGenerator.Repo
-  alias SocialContentGenerator.Integrations.Integration
+  alias SocialContentGenerator.Services.ApiClient
 
-  @doc """
-  Initiates OAuth flow for Google.
-  """
   def google_auth_url(redirect_uri \\ nil) do
-    client_id = System.get_env("GOOGLE_CLIENT_ID")
-    redirect_uri = redirect_uri || System.get_env("GOOGLE_REDIRECT_URI")
+    google_config = ApiClient.oauth_config(:google)
+    client_id = google_config[:client_id]
+    redirect_uri = redirect_uri || google_config[:redirect_uri]
+
+    IO.inspect(google_config)
 
     scope =
       "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
@@ -27,13 +26,11 @@ defmodule SocialContentGenerator.Services.OAuth do
       })
   end
 
-  @doc """
-  Exchanges authorization code for access token for Google.
-  """
   def google_exchange_code(code, redirect_uri \\ nil) do
-    client_id = System.get_env("GOOGLE_CLIENT_ID")
-    client_secret = System.get_env("GOOGLE_CLIENT_SECRET")
-    redirect_uri = redirect_uri || System.get_env("GOOGLE_REDIRECT_URI")
+    google_config = ApiClient.oauth_config(:google)
+    client_id = google_config[:client_id]
+    client_secret = google_config[:client_secret]
+    redirect_uri = redirect_uri || google_config[:redirect_uri]
 
     body =
       URI.encode_query(%{
@@ -58,9 +55,6 @@ defmodule SocialContentGenerator.Services.OAuth do
     end
   end
 
-  @doc """
-  Gets user information from Google using access token.
-  """
   def google_get_user_info(access_token) do
     headers = [{"Authorization", "Bearer #{access_token}"}]
 
@@ -76,12 +70,10 @@ defmodule SocialContentGenerator.Services.OAuth do
     end
   end
 
-  @doc """
-  Initiates OAuth flow for LinkedIn.
-  """
   def linkedin_auth_url(redirect_uri \\ nil) do
-    client_id = System.get_env("LINKEDIN_CLIENT_ID")
-    redirect_uri = redirect_uri || System.get_env("LINKEDIN_REDIRECT_URI")
+    linkedin_config = ApiClient.oauth_config(:linkedin)
+    client_id = linkedin_config[:client_id]
+    redirect_uri = redirect_uri || linkedin_config[:redirect_uri]
     scope = "r_liteprofile r_emailaddress w_member_social"
 
     "https://www.linkedin.com/oauth/v2/authorization?" <>
@@ -94,13 +86,11 @@ defmodule SocialContentGenerator.Services.OAuth do
       })
   end
 
-  @doc """
-  Exchanges authorization code for access token for LinkedIn.
-  """
   def linkedin_exchange_code(code) do
-    client_id = System.get_env("LINKEDIN_CLIENT_ID")
-    client_secret = System.get_env("LINKEDIN_CLIENT_SECRET")
-    redirect_uri = System.get_env("LINKEDIN_REDIRECT_URI")
+    linkedin_config = ApiClient.oauth_config(:linkedin)
+    client_id = linkedin_config[:client_id]
+    client_secret = linkedin_config[:client_secret]
+    redirect_uri = linkedin_config[:redirect_uri]
 
     body =
       URI.encode_query(%{
@@ -125,12 +115,10 @@ defmodule SocialContentGenerator.Services.OAuth do
     end
   end
 
-  @doc """
-  Initiates OAuth flow for Facebook.
-  """
   def facebook_auth_url(redirect_uri \\ nil) do
-    client_id = System.get_env("FACEBOOK_CLIENT_ID")
-    redirect_uri = redirect_uri || System.get_env("FACEBOOK_REDIRECT_URI")
+    facebook_config = ApiClient.oauth_config(:facebook)
+    client_id = facebook_config[:client_id]
+    redirect_uri = redirect_uri || facebook_config[:redirect_uri]
     scope = "pages_manage_posts,pages_read_engagement"
 
     "https://www.facebook.com/v18.0/dialog/oauth?" <>
@@ -143,13 +131,11 @@ defmodule SocialContentGenerator.Services.OAuth do
       })
   end
 
-  @doc """
-  Exchanges authorization code for access token for Facebook.
-  """
   def facebook_exchange_code(code) do
-    client_id = System.get_env("FACEBOOK_CLIENT_ID")
-    client_secret = System.get_env("FACEBOOK_CLIENT_SECRET")
-    redirect_uri = System.get_env("FACEBOOK_REDIRECT_URI")
+    facebook_config = ApiClient.oauth_config(:facebook)
+    client_id = facebook_config[:client_id]
+    client_secret = facebook_config[:client_secret]
+    redirect_uri = facebook_config[:redirect_uri]
 
     body =
       URI.encode_query(%{
@@ -171,9 +157,6 @@ defmodule SocialContentGenerator.Services.OAuth do
     end
   end
 
-  @doc """
-  Refreshes an expired access token.
-  """
   def refresh_token(integration) do
     case integration.provider do
       "google" -> refresh_google_token(integration)
@@ -184,8 +167,9 @@ defmodule SocialContentGenerator.Services.OAuth do
   end
 
   defp refresh_google_token(integration) do
-    client_id = System.get_env("GOOGLE_CLIENT_ID")
-    client_secret = System.get_env("GOOGLE_CLIENT_SECRET")
+    google_config = ApiClient.oauth_config(:google)
+    client_id = google_config[:client_id]
+    client_secret = google_config[:client_secret]
 
     body =
       URI.encode_query(%{
@@ -210,8 +194,9 @@ defmodule SocialContentGenerator.Services.OAuth do
   end
 
   defp refresh_linkedin_token(integration) do
-    client_id = System.get_env("LINKEDIN_CLIENT_ID")
-    client_secret = System.get_env("LINKEDIN_CLIENT_SECRET")
+    linkedin_config = ApiClient.oauth_config(:linkedin)
+    client_id = linkedin_config[:client_id]
+    client_secret = linkedin_config[:client_secret]
 
     body =
       URI.encode_query(%{
@@ -236,8 +221,9 @@ defmodule SocialContentGenerator.Services.OAuth do
   end
 
   defp refresh_facebook_token(integration) do
-    client_id = System.get_env("FACEBOOK_CLIENT_ID")
-    client_secret = System.get_env("FACEBOOK_CLIENT_SECRET")
+    facebook_config = ApiClient.oauth_config(:facebook)
+    client_id = facebook_config[:client_id]
+    client_secret = facebook_config[:client_secret]
 
     body =
       URI.encode_query(%{

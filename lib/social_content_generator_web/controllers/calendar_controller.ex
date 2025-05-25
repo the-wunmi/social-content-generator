@@ -1,7 +1,7 @@
 defmodule SocialContentGeneratorWeb.CalendarController do
   use SocialContentGeneratorWeb, :controller
 
-  alias SocialContentGenerator.Integrations
+  alias SocialContentGenerator.Integrations.Integration
   alias SocialContentGenerator.Services.GoogleCalendar
   alias SocialContentGenerator.Repo
   import Ecto.Query
@@ -24,7 +24,7 @@ defmodule SocialContentGeneratorWeb.CalendarController do
         |> redirect(to: ~p"/settings")
 
       integration ->
-        case GoogleCalendar.list_events(user_id, integration.id) do
+        case GoogleCalendar.list_events(user_id: user_id, integration_id: integration.id) do
           {:ok, events} ->
             render(conn, :index, events: events)
 

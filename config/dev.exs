@@ -2,14 +2,14 @@ import Config
 
 # Configure your database
 config :social_content_generator, SocialContentGenerator.Repo,
-  username: System.get_env("POSTGRES_USER"),
-  password: System.get_env("POSTGRES_PASSWORD"),
-  hostname: System.get_env("POSTGRES_HOST"),
-  database: System.get_env("POSTGRES_DB"),
+  username: System.get_env("POSTGRES_USER") || "postgres",
+  password: System.get_env("POSTGRES_PASSWORD") || "postgres",
+  hostname: System.get_env("POSTGRES_HOST") || "localhost",
+  database: System.get_env("POSTGRES_DB") || "social_content_generator_dev",
   port: String.to_integer(System.get_env("POSTGRES_PORT") || "5432"),
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
-  pool_size: 10
+  pool_size: String.to_integer(System.get_env("POSTGRES_POOL_SIZE") || "10")
 
 # For development, we disable any cache and enable
 # debugging and code reloading.
@@ -20,11 +20,13 @@ config :social_content_generator, SocialContentGenerator.Repo,
 config :social_content_generator, SocialContentGeneratorWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
-  http: [ip: {127, 0, 0, 1}, port: 4000],
+  http: [ip: {127, 0, 0, 1}, port: String.to_integer(System.get_env("PORT") || "4000")],
   check_origin: false,
   code_reloader: true,
   debug_errors: true,
-  secret_key_base: "GhcN9X5RXcWYpzLhlMbka5JVtgw6MK8D4+qTpRXlNYXOyQpprfAwZflaS1djmEGp",
+  secret_key_base:
+    System.get_env("SECRET_KEY_BASE") ||
+      "Hu4qQN3iKzTV4fJxhorPQlA/3nDtb9LM/0XhkpClBn4Ue/PEBWBxsa4UaZKAUzLN",
   watchers: [
     esbuild:
       {Esbuild, :install_and_run, [:social_content_generator, ~w(--sourcemap=inline --watch)]},
@@ -77,11 +79,51 @@ config :phoenix, :stacktrace_depth, 20
 # Initialize plugs at runtime for faster development compilation
 config :phoenix, :plug_init_mode, :runtime
 
-config :phoenix_live_view,
-  # Include HEEx debug annotations as HTML comments in rendered markup
-  debug_heex_annotations: true,
-  # Enable helpful, but potentially expensive runtime checks
-  enable_expensive_runtime_checks: true
+# Include HEEx debug annotations as HTML comments in rendered markup
+config :phoenix_live_view, :debug_heex_annotations, true
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
+
+# Configure Oban for development
+config :social_content_generator, Oban, testing: :inline
+
+# OAuth Configuration
+config :social_content_generator, :oauth,
+  google: [
+    client_id: System.get_env("GOOGLE_CLIENT_ID"),
+    client_secret: System.get_env("GOOGLE_CLIENT_SECRET"),
+    redirect_uri:
+      System.get_env("GOOGLE_REDIRECT_URI") || "http://localhost:4000/auth/google/callback"
+  ],
+  linkedin: [
+    client_id: System.get_env("LINKEDIN_CLIENT_ID"),
+    client_secret: System.get_env("LINKEDIN_CLIENT_SECRET"),
+    redirect_uri:
+      System.get_env("LINKEDIN_REDIRECT_URI") || "http://localhost:4000/auth/linkedin/callback"
+  ],
+  facebook: [
+    client_id: System.get_env("FACEBOOK_CLIENT_ID"),
+    client_secret: System.get_env("FACEBOOK_CLIENT_SECRET"),
+    redirect_uri:
+      System.get_env("FACEBOOK_REDIRECT_URI") || "http://localhost:4000/auth/facebook/callback"
+  ]
+
+# API Keys for external services
+config :social_content_generator, :api_keys,
+  recall_api_key: System.get_env("RECALL_API_KEY"),
+  openai_api_key: System.get_env("OPENAI_API_KEY")
+
+# Bot configuration
+config :social_content_generator, :bot,
+  join_offset_minutes: String.to_integer(System.get_env("BOT_JOIN_OFFSET_MINUTES") || "5")
+
+# SMTP Configuration for development
+config :social_content_generator, SocialContentGenerator.Mailer,
+  adapter: if(System.get_env("SMTP_HOST"), do: Swoosh.Adapters.SMTP, else: Swoosh.Adapters.Local),
+  relay: System.get_env("SMTP_HOST"),
+  port: String.to_integer(System.get_env("SMTP_PORT") || "587"),
+  username: System.get_env("SMTP_USERNAME"),
+  password: System.get_env("SMTP_PASSWORD"),
+  tls: :if_available,
+  retries: 2

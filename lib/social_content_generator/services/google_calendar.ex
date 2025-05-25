@@ -75,6 +75,6 @@ defmodule SocialContentGenerator.Services.GoogleCalendar do
 
   defp extract_meet_url(_), do: nil
 
-  def parse_datetime(%{"dateTime" => date_time}), do: DateTime.from_iso8601!(date_time)
-  def parse_datetime(%{"date" => date}), do: DateTime.from_iso8601!("#{date}T00:00:00Z")
+  def parse_datetime(%{"dateTime" => date_time}), do: DateTime.from_iso8601(date_time)
+  def parse_datetime(%{"date" => date}), do: DateTime.from_iso8601("#{date}T00:00:00Z")
 end

@@ -55,6 +55,7 @@ defmodule SocialContentGenerator.MixProject do
       {:oban, "2.19.4"},
       {:bandit, "1.6.11"},
       {:heroicons, "0.5.6"},
+      {:dotenvy, "0.8.0"},
       # Development dependencies
       {:credo, "1.7.12", only: [:dev, :test], runtime: false},
       {:dialyxir, "1.4.5", only: [:dev, :test], runtime: false},

@@ -6,9 +6,11 @@
 <div class="mt-8">
   <div :if={@meetings == []} class="text-center py-12">
     <p class="text-gray-500">No meetings found.</p>
-    <p class="text-sm text-gray-400 mt-2">Meetings will appear here after you connect your calendar and schedule meetings with Recall.ai bots.</p>
+    <p class="text-sm text-gray-400 mt-2">
+      Meetings will appear here after you connect your calendar and schedule meetings.
+    </p>
   </div>
-  
+
   <div :if={@meetings != []} class="grid gap-4">
     <div :for={meeting <- @meetings} class="bg-white shadow rounded-lg p-6">
       <div class="flex justify-between items-start">
@@ -20,12 +22,15 @@
           <p class="text-sm text-gray-600 mt-2">{meeting.description}</p>
         </div>
         <div class="flex space-x-2">
-          <.link navigate={~p"/meetings/#{meeting}"} class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+          <.link
+            navigate={~p"/meetings/#{meeting}"}
+            class="text-blue-600 hover:text-blue-800 text-sm font-medium"
+          >
             View Details
           </.link>
         </div>
       </div>
-      
+
       <div class="mt-4 flex items-center space-x-4">
         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
           {meeting.status || "scheduled"}
@@ -35,16 +40,20 @@
             📹 Zoom
           </span>
           <span :if={String.contains?(meeting.meeting_url, "teams.microsoft.com")}>
-            🎥 Teams  
+            🎥 Teams
           </span>
           <span :if={String.contains?(meeting.meeting_url, "meet.google.com")}>
             📞 Google Meet
           </span>
-          <span :if={!String.contains?(meeting.meeting_url, "zoom.us") and !String.contains?(meeting.meeting_url, "teams.microsoft.com") and !String.contains?(meeting.meeting_url, "meet.google.com")}>
+          <span :if={
+            !String.contains?(meeting.meeting_url, "zoom.us") and
+              !String.contains?(meeting.meeting_url, "teams.microsoft.com") and
+              !String.contains?(meeting.meeting_url, "meet.google.com")
+          }>
             🔗 Meeting Link
           </span>
         </span>
       </div>
     </div>
   </div>
-</div> 
+</div>

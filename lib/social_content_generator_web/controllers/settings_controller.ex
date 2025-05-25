@@ -6,12 +6,14 @@ defmodule SocialContentGeneratorWeb.SettingsController do
   alias SocialContentGenerator.Automations
 
   def index(conn, _params) do
-    integrations = Integrations.list_integrations_by_user(conn.assigns.current_user.id)
+    integrations =
+      Integrations.list_integrations(user_id: conn.assigns.current_user.id, scopes: "automation")
+
     render(conn, :index, integrations: integrations)
   end
 
   def automations(conn, _params) do
-    automations = Automations.list_automations_by_user(conn.assigns.current_user.id)
+    automations = Automations.list_automations(user_id: conn.assigns.current_user.id)
     render(conn, :automations, automations: automations)
   end
 
@@ -23,7 +25,7 @@ defmodule SocialContentGeneratorWeb.SettingsController do
     automation_params = Map.put(automation_params, "user_id", conn.assigns.current_user.id)
 
     case Automations.create_automation(automation_params) do
-      {:ok, automation} ->
+      {:ok, _automation} ->
         conn
         |> put_flash(:info, "Automation created successfully.")
         |> redirect(to: ~p"/settings/automations")
@@ -36,15 +38,15 @@ defmodule SocialContentGeneratorWeb.SettingsController do
   end
 
   def edit_automation(conn, %{"id" => id}) do
-    automation = Automations.get_automation!(id)
+    automation = Automations.get_automation(id)
     render(conn, :edit_automation, automation: automation)
   end
 
   def update_automation(conn, %{"id" => id, "automation" => automation_params}) do
-    automation = Automations.get_automation!(id)
+    automation = Automations.get_automation(id)
 
     case Automations.update_automation(automation, automation_params) do
-      {:ok, automation} ->
+      {:ok, _automation} ->
         conn
         |> put_flash(:info, "Automation updated successfully.")
         |> redirect(to: ~p"/settings/automations")
@@ -57,7 +59,7 @@ defmodule SocialContentGeneratorWeb.SettingsController do
   end
 
   def delete_automation(conn, %{"id" => id}) do
-    automation = Automations.get_automation!(id)
+    automation = Automations.get_automation(id)
     {:ok, _automation} = Automations.delete_automation(automation)
 
     conn

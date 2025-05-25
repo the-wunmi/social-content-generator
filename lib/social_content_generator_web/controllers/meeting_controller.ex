@@ -9,12 +9,12 @@ defmodule SocialContentGeneratorWeb.MeetingController do
 
   def index(conn, _params) do
     user_id = conn.assigns.current_user.id
-    meetings = Meetings.list_user_meetings(user_id)
+    meetings = Meetings.list_meetings(user_id: user_id)
     render(conn, :index, meetings: meetings)
   end
 
   def show(conn, %{"id" => id}) do
-    meeting = Meetings.get_meeting!(id)
+    meeting = Meetings.get_meeting(id)
     render(conn, :show, meeting: meeting)
   end
 
@@ -48,7 +48,7 @@ defmodule SocialContentGeneratorWeb.MeetingController do
 
           {:error, reason} ->
             conn
-            |> put_flash(:error, "Error creating Recall.ai bot: #{reason}")
+            |> put_flash(:error, "Error creating bot: #{reason}")
             |> redirect(to: ~p"/meetings")
         end
 

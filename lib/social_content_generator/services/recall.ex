@@ -1,14 +1,17 @@
 defmodule SocialContentGenerator.Services.Recall do
   @moduledoc """
-  Handles integration with Recall.ai for meeting transcription.
+  Service for interacting with the Recall.ai API.
   """
 
+  alias SocialContentGenerator.Services.ApiClient
+
   @recall_api_url "https://api.recall.ai/api/v1"
-  @recall_api_key System.get_env("RECALL_API_KEY")
 
   def create_bot(meeting_url, join_offset_minutes) do
+    api_key = ApiClient.recall_api_key()
+
     headers = [
-      {"Authorization", "Bearer #{@recall_api_key}"},
+      {"Authorization", "Bearer #{api_key}"},
       {"Content-Type", "application/json"}
     ]
 
@@ -43,8 +46,10 @@ defmodule SocialContentGenerator.Services.Recall do
   end
 
   def get_bot_status(bot_id) do
+    api_key = ApiClient.recall_api_key()
+
     headers = [
-      {"Authorization", "Bearer #{@recall_api_key}"},
+      {"Authorization", "Bearer #{api_key}"},
       {"Content-Type", "application/json"}
     ]
 
@@ -62,8 +67,10 @@ defmodule SocialContentGenerator.Services.Recall do
   end
 
   def get_bot_transcript(bot_id) do
+    api_key = ApiClient.recall_api_key()
+
     headers = [
-      {"Authorization", "Bearer #{@recall_api_key}"},
+      {"Authorization", "Bearer #{api_key}"},
       {"Content-Type", "application/json"}
     ]
 
@@ -98,7 +105,7 @@ defmodule SocialContentGenerator.Services.Recall do
 
   # Convenience wrapper that accepts a %Meeting{} struct.
   def create_bot(%{meeting_url: meeting_url}) do
-    join_offset = Application.get_env(:social_content_generator, :bot_join_offset_minutes, 5)
+    join_offset = ApiClient.bot_join_offset_minutes()
     create_bot(meeting_url, join_offset)
   end
 end

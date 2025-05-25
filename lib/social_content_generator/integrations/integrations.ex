@@ -2,6 +2,29 @@ defmodule SocialContentGenerator.Integrations do
   @moduledoc """
   Context module for managing external integrations (Google, LinkedIn, Facebook, ...)
   and the user-specific credentials that go with them.
+
+  ## Filtering Integrations
+
+  The `list_integrations/1` function supports filtering by:
+  - `:provider` - Filter by provider name (e.g., "google", "linkedin")
+  - `:name` - Filter by integration name
+  - `:slug` - Filter by unique slug (e.g., "google-auth", "google-calendar")
+  - `:user_id` - Include user integration data for a specific user
+  - `:scopes` - Filter by scopes (string or list of strings)
+
+  ### Scope Filtering Examples
+
+      # Find integrations with "auth" scope
+      list_integrations(scopes: "auth")
+
+      # Find integrations with both "auth" AND "bot" scopes
+      list_integrations(scopes: ["auth", "bot"])
+
+      # Find Google integrations with automation scope
+      list_integrations(provider: "google", scopes: "automation")
+
+      # Find integration by slug
+      list_integrations(slug: "google-calendar")
   """
 
   import Ecto.Query, warn: false
@@ -12,61 +35,132 @@ defmodule SocialContentGenerator.Integrations do
   alias SocialContentGenerator.Workers.CalendarWorker
   alias Oban
 
-  @doc """
-  Return all integrations (with credential info) that belong to a given user.
-  """
-  def list_integrations_by_user(user_id) do
-    from(ui in UserIntegration,
-      where: ui.user_id == ^user_id and is_nil(ui.deleted_at),
-      join: i in assoc(ui, :integration),
-      preload: [integration: i]
-    )
-    |> Repo.all()
-  end
+  @valid_filters [:user_id, :provider, :integration_id]
+  @valid_integration_filters [:provider, :name, :user_id, :scopes, :slug]
 
-  @doc """
-  Fetch a specific integration for a user by provider (e.g. "google", "linkedin").
-  Returns the `UserIntegration` record (preloaded with its `Integration`) or `nil`.
-  """
-  def get_integration_by_user_and_provider(user_id, provider) do
-    from(ui in UserIntegration,
-      join: i in assoc(ui, :integration),
-      where: ui.user_id == ^user_id and i.provider == ^provider and is_nil(ui.deleted_at),
-      preload: [integration: i]
-    )
+  @spec get_integration(integer()) :: %Integration{} | nil
+  def get_integration(id) when is_integer(id) do
+    Integration.not_deleted(Integration)
+    |> where(id: ^id)
     |> Repo.one()
   end
 
-  @doc """
-  Create a new user-integration pair (and the provider-level Integration record if it
-  doesn't exist yet).
-  Expects a map that contains at least `provider`, `user_id`, and oauth token fields.
-  """
-  def create_integration(%{provider: provider} = attrs) do
-    Repo.transaction(fn ->
-      integration =
-        Repo.get_by(Integration, provider: provider) ||
-          %Integration{}
-          |> Integration.changeset(%{
-            name: String.capitalize(provider),
-            provider: provider,
-            description: "#{String.capitalize(provider)} integration"
-          })
-          |> Repo.insert!()
+  @spec get_integration(keyword()) :: %Integration{} | nil
+  def get_integration(filters) when is_list(filters) do
+    validate_filters!(filters, @valid_integration_filters)
 
-      attrs = Map.put(attrs, :integration_id, integration.id)
+    Integration.not_deleted(Integration)
+    |> apply_filters(filters)
+    |> Repo.one()
+  end
 
-      %UserIntegration{}
-      |> UserIntegration.changeset(attrs)
-      |> Repo.insert()
-      |> after_successful_upsert()
+  @spec list_integrations(keyword()) :: [%Integration{}]
+  def list_integrations(filters \\ []) when is_list(filters) do
+    validate_filters!(filters, @valid_integration_filters)
+
+    base_query = Integration.not_deleted(Integration)
+
+    # Check if user_id is in the filters
+    case Keyword.get(filters, :user_id) do
+      nil ->
+        base_query
+        |> apply_filters(filters)
+        |> Repo.all()
+
+      user_id ->
+        from(i in base_query,
+          left_join: ui in UserIntegration,
+          on: ui.integration_id == i.id and ui.user_id == ^user_id and is_nil(ui.deleted_at),
+          preload: [user_integrations: ui]
+        )
+        |> apply_filters(filters)
+        |> Repo.all()
+    end
+  end
+
+  @spec get_user_integration(keyword()) :: %UserIntegration{} | nil
+  def get_user_integration(filters) when is_list(filters) do
+    validate_filters!(filters, @valid_filters)
+
+    from(ui in UserIntegration,
+      join: i in assoc(ui, :integration),
+      where: is_nil(ui.deleted_at),
+      preload: [integration: i]
+    )
+    |> apply_user_integration_filters(filters)
+    |> Repo.one()
+  end
+
+  @spec list_user_integrations(keyword()) :: [%UserIntegration{}]
+  def list_user_integrations(filters) when is_list(filters) do
+    validate_filters!(filters, @valid_filters)
+
+    from(ui in UserIntegration,
+      join: i in assoc(ui, :integration),
+      where: is_nil(ui.deleted_at),
+      preload: [integration: i]
+    )
+    |> apply_user_integration_filters(filters)
+    |> Repo.all()
+  end
+
+  defp apply_filters(query, filters) do
+    Enum.reduce(filters, query, fn
+      {:provider, provider}, query ->
+        where(query, [i], i.provider == ^provider)
+
+      {:name, name}, query ->
+        where(query, [i], i.name == ^name)
+
+      {:slug, slug}, query ->
+        where(query, [i], i.slug == ^slug)
+
+      {:scopes, scopes}, query when is_list(scopes) ->
+        # Filter integrations that have ALL the specified scopes
+        Enum.reduce(scopes, query, fn scope, acc_query ->
+          where(acc_query, [i], ^scope in i.scopes)
+        end)
+
+      {:scopes, scope}, query when is_binary(scope) ->
+        # Filter integrations that have the specified scope
+        where(query, [i], ^scope in i.scopes)
+
+      {:user_id, _user_id}, query ->
+        # user_id is handled in the join logic in list_integrations
+        query
     end)
   end
 
-  @doc """
-  Update an existing `UserIntegration` row with fresh tokens.
-  """
-  def update_integration(%UserIntegration{} = user_integration, attrs) do
+  defp apply_user_integration_filters(query, filters) do
+    Enum.reduce(filters, query, fn
+      {:user_id, user_id}, query ->
+        where(query, [ui, i], ui.user_id == ^user_id)
+
+      {:provider, provider}, query ->
+        where(query, [ui, i], i.provider == ^provider)
+
+      {:integration_id, integration_id}, query ->
+        where(query, [ui, i], ui.integration_id == ^integration_id)
+    end)
+  end
+
+  # Validate that all filter keys are valid fields
+  defp validate_filters!(filters, valid_fields) do
+    invalid_fields =
+      filters
+      |> Keyword.keys()
+      |> Enum.reject(&(&1 in valid_fields))
+
+    if invalid_fields != [] do
+      raise ArgumentError,
+            "Invalid filter fields: #{inspect(invalid_fields)}. Valid fields: #{inspect(valid_fields)}"
+    end
+  end
+
+  def create_user_integration(attrs \\ %{}),
+    do: %UserIntegration{} |> UserIntegration.changeset(attrs) |> Repo.insert()
+
+  def update_user_integration(%UserIntegration{} = user_integration, attrs) do
     user_integration
     |> UserIntegration.changeset(attrs)
     |> Repo.update()

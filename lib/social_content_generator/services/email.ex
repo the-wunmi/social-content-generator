@@ -35,11 +35,11 @@ defmodule SocialContentGenerator.Services.Email do
     """
   end
 
-  def send_email(to, subject, content, from_email, smtp_config) do
+  def send_email(to, subject, _content, from_email, _smtp_config) do
     # This is a placeholder for actual email sending logic
     # In a real implementation, this would use a library like Swoosh or Bamboo
     # to send emails through an SMTP server
-    headers = [
+    _headers = [
       {"From", from_email},
       {"To", to},
       {"Subject", subject},

@@ -12,7 +12,6 @@ defmodule SocialContentGenerator.Workers.CalendarWorker do
   alias SocialContentGenerator.Calendars.CalendarEventAttendee
   alias SocialContentGenerator.Services.GoogleCalendar
   alias SocialContentGenerator.Repo
-  import Ecto.Query
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"integration_id" => integration_id}}) do
