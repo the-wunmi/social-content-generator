@@ -7,7 +7,7 @@ defmodule SocialContentGenerator.Services.Recall do
 
   @recall_api_url "https://api.recall.ai/api/v1"
 
-  def create_bot(meeting_url, join_offset_minutes) do
+  def create_bot(meeting_url) do
     api_key = ApiClient.recall_api_key()
 
     headers = [
@@ -18,7 +18,6 @@ defmodule SocialContentGenerator.Services.Recall do
     body =
       Jason.encode!(%{
         meeting_url: meeting_url,
-        join_offset_minutes: join_offset_minutes,
         bot_name: "Social Content Generator Bot"
       })
 
@@ -30,11 +29,7 @@ defmodule SocialContentGenerator.Services.Recall do
          %{
            name: "Social Content Generator Bot",
            integration_bot_id: response["id"],
-           status: "active",
-           configuration: %{
-             meeting_url: meeting_url,
-             join_offset_minutes: join_offset_minutes
-           }
+           status: "active"
          }}
 
       {:ok, %{status_code: status_code, body: response_body}} ->
@@ -105,7 +100,6 @@ defmodule SocialContentGenerator.Services.Recall do
 
   # Convenience wrapper that accepts a %Meeting{} struct.
   def create_bot(%{meeting_url: meeting_url}) do
-    join_offset = ApiClient.bot_join_offset_minutes()
-    create_bot(meeting_url, join_offset)
+    create_bot(meeting_url)
   end
 end
