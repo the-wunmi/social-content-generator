@@ -224,13 +224,16 @@ jobs:
 
     - name: Deploy to Cloud Run
       run: |
+        # Get database host from Cloud SQL instance
+        POSTGRES_HOST=$(gcloud sql instances describe $SERVICE_NAME-db --format="value(ipAddresses[0].ipAddress)")
+        
         gcloud run deploy $SERVICE_NAME \
           --image $REGISTRY/$PROJECT_ID/$REPOSITORY/$SERVICE_NAME:$GITHUB_SHA \
           --region $REGION \
           --platform managed \
           --allow-unauthenticated \
-          --set-env-vars="MIX_ENV=prod,PHX_HOST=${{ secrets.APP_DOMAIN }},PORT=4000" \
-          --set-secrets="DATABASE_URL=$SERVICE_NAME-database-url:latest,SECRET_KEY_BASE=$SERVICE_NAME-secret-key-base:latest,OPENAI_API_KEY=$SERVICE_NAME-openai-api-key:latest,GOOGLE_OAUTH_CLIENT_ID=$SERVICE_NAME-google-oauth-client-id:latest,GOOGLE_OAUTH_CLIENT_SECRET=$SERVICE_NAME-google-oauth-client-secret:latest,RECALL_API_KEY=$SERVICE_NAME-recall-api-key:latest" \
+          --set-env-vars="MIX_ENV=prod,PHX_HOST=${{ secrets.APP_DOMAIN }},PORT=4000,POSTGRES_HOST=$POSTGRES_HOST,POSTGRES_DB=${{ secrets.DATABASE_NAME }},POSTGRES_USER=${{ secrets.DATABASE_USER }},POSTGRES_PORT=5432" \
+          --set-secrets="DATABASE_URL=$SERVICE_NAME-database-url:latest,SECRET_KEY_BASE=$SERVICE_NAME-secret-key-base:latest,OPENAI_API_KEY=$SERVICE_NAME-openai-api-key:latest,OPENAI_BASE_URL=$SERVICE_NAME-openai-base-url:latest,OPENAI_MODEL=$SERVICE_NAME-openai-model:latest,OPENAI_MAX_TOKENS=$SERVICE_NAME-openai-max-tokens:latest,OPENAI_TEMPERATURE=$SERVICE_NAME-openai-temperature:latest,GOOGLE_CLIENT_ID=$SERVICE_NAME-google-client-id:latest,GOOGLE_CLIENT_SECRET=$SERVICE_NAME-google-client-secret:latest,POSTGRES_PASSWORD=$SERVICE_NAME-postgres-password:latest,RECALL_API_KEY=$SERVICE_NAME-recall-api-key:latest" \
           --memory=512Mi \
           --cpu=1 \
           --min-instances=0 \

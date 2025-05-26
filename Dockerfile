@@ -23,15 +23,13 @@ RUN npm --prefix ./assets ci --progress=false --no-audit --loglevel=error
 
 COPY priv priv
 COPY assets assets
-RUN npm run --prefix ./assets deploy
-RUN mix phx.digest
+RUN mix assets.deploy
 
 # Copy source code
 COPY lib lib
 RUN mix compile
 
 # Copy runtime files
-COPY rel rel
 RUN mix release
 
 # Start a new build stage so that the final image will only contain

@@ -118,6 +118,21 @@ resource "google_secret_manager_secret_version" "database_url" {
   ]
 }
 
+resource "google_secret_manager_secret" "postgres_password" {
+  secret_id = "${var.app_name}-postgres-password"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_secret_manager_secret_version" "postgres_password" {
+  secret = google_secret_manager_secret.postgres_password.id
+  secret_data = var.database_password
+}
+
 resource "google_secret_manager_secret" "secret_key_base" {
   secret_id = "${var.app_name}-secret-key-base"
 
@@ -144,6 +159,46 @@ resource "google_secret_manager_secret" "openai_api_key" {
   depends_on = [google_project_service.apis]
 }
 
+resource "google_secret_manager_secret" "openai_base_url" {
+  secret_id = "${var.app_name}-openai-base-url"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_secret_manager_secret" "openai_model" {
+  secret_id = "${var.app_name}-openai-model"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_secret_manager_secret" "openai_max_tokens" {
+  secret_id = "${var.app_name}-openai-max-tokens"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_secret_manager_secret" "openai_temperature" {
+  secret_id = "${var.app_name}-openai-temperature"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
 # Create empty secrets - values will be set manually in GCP Console
 resource "google_secret_manager_secret_version" "openai_api_key" {
   secret = google_secret_manager_secret.openai_api_key.id
@@ -154,18 +209,8 @@ resource "google_secret_manager_secret_version" "openai_api_key" {
   }
 }
 
-resource "google_secret_manager_secret" "google_oauth_client_id" {
-  secret_id = "${var.app_name}-google-oauth-client-id"
-
-  replication {
-    auto {}
-  }
-
-  depends_on = [google_project_service.apis]
-}
-
-resource "google_secret_manager_secret_version" "google_oauth_client_id" {
-  secret = google_secret_manager_secret.google_oauth_client_id.id
+resource "google_secret_manager_secret_version" "openai_base_url" {
+  secret = google_secret_manager_secret.openai_base_url.id
   secret_data = "PLACEHOLDER_SET_IN_GCP_CONSOLE"
   
   lifecycle {
@@ -173,8 +218,35 @@ resource "google_secret_manager_secret_version" "google_oauth_client_id" {
   }
 }
 
-resource "google_secret_manager_secret" "google_oauth_client_secret" {
-  secret_id = "${var.app_name}-google-oauth-client-secret"
+resource "google_secret_manager_secret_version" "openai_model" {
+  secret = google_secret_manager_secret.openai_model.id
+  secret_data = "PLACEHOLDER_SET_IN_GCP_CONSOLE"
+  
+  lifecycle {
+    ignore_changes = [secret_data]
+  }
+}
+
+resource "google_secret_manager_secret_version" "openai_max_tokens" {
+  secret = google_secret_manager_secret.openai_max_tokens.id
+  secret_data = "PLACEHOLDER_SET_IN_GCP_CONSOLE"
+  
+  lifecycle {
+    ignore_changes = [secret_data]
+  }
+}
+
+resource "google_secret_manager_secret_version" "openai_temperature" {
+  secret = google_secret_manager_secret.openai_temperature.id
+  secret_data = "PLACEHOLDER_SET_IN_GCP_CONSOLE"
+  
+  lifecycle {
+    ignore_changes = [secret_data]
+  }
+}
+
+resource "google_secret_manager_secret" "google_client_id" {
+  secret_id = "${var.app_name}-google-client-id"
 
   replication {
     auto {}
@@ -183,8 +255,27 @@ resource "google_secret_manager_secret" "google_oauth_client_secret" {
   depends_on = [google_project_service.apis]
 }
 
-resource "google_secret_manager_secret_version" "google_oauth_client_secret" {
-  secret = google_secret_manager_secret.google_oauth_client_secret.id
+resource "google_secret_manager_secret_version" "google_client_id" {
+  secret = google_secret_manager_secret.google_client_id.id
+  secret_data = "PLACEHOLDER_SET_IN_GCP_CONSOLE"
+  
+  lifecycle {
+    ignore_changes = [secret_data]
+  }
+}
+
+resource "google_secret_manager_secret" "google_client_secret" {
+  secret_id = "${var.app_name}-google-client-secret"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_secret_manager_secret_version" "google_client_secret" {
+  secret = google_secret_manager_secret.google_client_secret.id
   secret_data = "PLACEHOLDER_SET_IN_GCP_CONSOLE"
   
   lifecycle {
@@ -250,6 +341,36 @@ resource "google_cloud_run_v2_service" "app" {
       }
 
       env {
+        name  = "POSTGRES_HOST"
+        value = google_sql_database_instance.postgres.public_ip_address
+      }
+
+      env {
+        name  = "POSTGRES_DB"
+        value = var.database_name
+      }
+
+      env {
+        name  = "POSTGRES_USER"
+        value = var.database_user
+      }
+
+      env {
+        name = "POSTGRES_PASSWORD"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.postgres_password.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name  = "POSTGRES_PORT"
+        value = "5432"
+      }
+
+      env {
         name  = "INSTANCE_CONNECTION_NAME"
         value = google_sql_database_instance.postgres.connection_name
       }
@@ -275,20 +396,60 @@ resource "google_cloud_run_v2_service" "app" {
       }
 
       env {
-        name = "GOOGLE_OAUTH_CLIENT_ID"
+        name = "OPENAI_BASE_URL"
         value_source {
           secret_key_ref {
-            secret  = google_secret_manager_secret.google_oauth_client_id.secret_id
+            secret  = google_secret_manager_secret.openai_base_url.secret_id
             version = "latest"
           }
         }
       }
 
       env {
-        name = "GOOGLE_OAUTH_CLIENT_SECRET"
+        name = "OPENAI_MODEL"
         value_source {
           secret_key_ref {
-            secret  = google_secret_manager_secret.google_oauth_client_secret.secret_id
+            secret  = google_secret_manager_secret.openai_model.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "OPENAI_MAX_TOKENS"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.openai_max_tokens.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "OPENAI_TEMPERATURE"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.openai_temperature.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "GOOGLE_CLIENT_ID"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.google_client_id.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "GOOGLE_CLIENT_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.google_client_secret.secret_id
             version = "latest"
           }
         }
