@@ -1,110 +1,65 @@
-# https://raw.githubusercontent.com/nickjj/docker-phoenix-example/refs/heads/main/Dockerfile
-FROM node:22.15.0-bookworm-slim AS assets
+# Use the official Elixir image as the base image  
+FROM elixir:1.18-alpine AS build
 
-LABEL maintainer="Nick Janetakis <nick.janetakis@gmail.com>"
+# Install build dependencies
+RUN apk add --no-cache build-base npm git python3 curl
 
-WORKDIR /app/assets
+# Set build ENV
+ENV MIX_ENV=prod
 
-ARG UID=1000
-ARG GID=1000
+# Install hex + rebar
+RUN mix local.hex --force && \
+    mix local.rebar --force
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends build-essential \
-  && rm -rf /var/lib/apt/lists/* /usr/share/doc /usr/share/man \
-  && apt-get clean \
-  && groupmod -g "${GID}" node && usermod -u "${UID}" -g "${GID}" node \
-  && mkdir -p /node_modules && chown node:node -R /node_modules /app
+# Create app directory and copy the Elixir projects into it
+WORKDIR /app
+COPY mix.exs mix.lock ./
+COPY config config
+RUN mix do deps.get, deps.compile
 
-USER node
+# Copy assets first and install npm dependencies
+COPY assets/package.json ./assets/
+RUN cd assets && npm install --production=false
 
-COPY --chown=node:node assets/package.json assets/*yarn* ./
+# Copy all source files
+COPY priv priv
+COPY assets assets
+COPY lib lib
 
-RUN yarn install && yarn cache clean
+# Build assets manually to avoid esbuild download issues
+RUN cd assets && \
+    mkdir -p ../priv/static/assets && \
+    npx esbuild js/app.js --bundle --target=es2017 --outdir=../priv/static/assets --external:/fonts/* --external:/images/* && \
+    npx tailwindcss --config=tailwind.config.js --input=css/app.css --output=../priv/static/assets/app.css --minify
 
-ARG NODE_ENV="production"
-ENV NODE_ENV="${NODE_ENV}" \
-  PATH="${PATH}:/node_modules/.bin" \
-  USER="node"
+# Run Phoenix digest to add cache-busting hashes
+RUN mix phx.digest
 
-COPY --chown=node:node . ..
+# Compile the application
+RUN mix compile
 
-RUN if [ "${NODE_ENV}" != "development" ]; then \
-  ../run yarn:build:js && ../run yarn:build:css; else mkdir -p /app/priv/static; fi
+# Source code already copied above
 
-###############################################################################
+# Build release
+RUN mix release
 
-FROM elixir:1.18.4-slim AS dev
-LABEL maintainer="Nick Janetakis <nick.janetakis@gmail.com>"
+# Start a new build stage so that the final image will only contain
+# the compiled release and other runtime necessities
+FROM alpine:3.18 AS app
+RUN apk add --no-cache openssl ncurses-libs libstdc++
 
 WORKDIR /app
 
-ARG UID=1000
-ARG GID=1000
+RUN addgroup -g 1001 -S phoenix && \
+    adduser -S phoenix -u 1001
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates build-essential curl inotify-tools \
-  && rm -rf /var/lib/apt/lists/* /usr/share/doc /usr/share/man \
-  && apt-get clean \
-  && groupadd -g "${GID}" elixir \
-  && useradd --create-home --no-log-init -u "${UID}" -g "${GID}" elixir \
-  && mkdir -p /mix && chown elixir:elixir -R /mix /app
+# Copy the release from the build stage
+COPY --from=build --chown=phoenix:phoenix /app/_build/prod/rel/social_content_generator ./
 
-USER elixir
+USER phoenix
 
-RUN mix local.hex --force && mix local.rebar --force
+# Expose the port the app runs on
+EXPOSE 4000
 
-ARG MIX_ENV="prod"
-ENV MIX_ENV="${MIX_ENV}" \
-  USER="elixir"
-
-COPY --chown=elixir:elixir mix.* ./
-RUN if [ "${MIX_ENV}" = "dev" ]; then \
-  mix deps.get; else mix deps.get --only "${MIX_ENV}"; fi
-
-COPY --chown=elixir:elixir config/config.exs config/"${MIX_ENV}".exs config/
-RUN mix deps.compile
-
-COPY --chown=elixir:elixir --from=assets /app/priv/static /public
-COPY --chown=elixir:elixir . .
-
-RUN if [ "${MIX_ENV}" != "dev" ]; then \
-  ln -s /public /app/priv/static \
-  && mix phx.digest && mix release && rm -rf /app/priv/static; fi
-
-ENTRYPOINT ["/app/bin/docker-entrypoint-web"]
-
-EXPOSE 8000
-
-CMD ["iex", "-S", "mix", "phx.server"]
-
-###############################################################################
-
-FROM elixir:1.18.3-slim AS prod
-LABEL maintainer="Nick Janetakis <nick.janetakis@gmail.com>"
-
-WORKDIR /app
-
-ARG UID=1000
-ARG GID=1000
-
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends curl \
-  && rm -rf /var/lib/apt/lists/* /usr/share/doc /usr/share/man \
-  && apt-get clean \
-  && groupadd -g "${GID}" elixir \
-  && useradd --create-home --no-log-init -u "${UID}" -g "${GID}" elixir \
-  && chown elixir:elixir -R /app
-
-USER elixir
-
-ENV USER=elixir
-
-COPY --chown=elixir:elixir --from=dev /public /public
-# COPY --chown=elixir:elixir --from=dev /mix/_build/prod/rel/social_content_generator ./
-COPY --chown=elixir:elixir bin/docker-entrypoint-web bin/
-
-ENTRYPOINT ["/app/bin/docker-entrypoint-web"]
-
-EXPOSE 8000
-
+# Set the default command
 CMD ["bin/social_content_generator", "start"]
