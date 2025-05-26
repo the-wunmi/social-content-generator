@@ -3,7 +3,6 @@ defmodule SocialContentGenerator.Services.SocialMedia do
   Handles integration with various social media platforms.
   """
 
-  alias SocialContentGenerator.Social.SocialPost
   alias SocialContentGenerator.Services.OpenAI
   require Logger
 
@@ -17,7 +16,11 @@ defmodule SocialContentGenerator.Services.SocialMedia do
       {:ok, content} ->
         Logger.info("OpenAI generated content successfully")
         Logger.info("Content length: #{String.length(content)} characters")
-        content
+        {:ok, content}
+
+      {:error, error} ->
+        Logger.error("OpenAI social post generation failed: #{inspect(error)}")
+        {:error, error}
     end
   end
 
@@ -89,15 +92,5 @@ defmodule SocialContentGenerator.Services.SocialMedia do
         Logger.error("Facebook HTTP error: #{reason}")
         {:error, "Failed to post to Facebook: #{reason}"}
     end
-  end
-
-  def generate_post(meeting_id, automation_id) do
-    Logger.info("SocialMedia.generate_post called")
-    Logger.info("Meeting ID: #{meeting_id}")
-    Logger.info("Automation ID: #{automation_id}")
-
-    result = SocialPost.generate_post(meeting_id, automation_id)
-    Logger.info("SocialPost.generate_post result: #{inspect(result)}")
-    result
   end
 end

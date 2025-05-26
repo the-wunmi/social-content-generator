@@ -320,11 +320,6 @@ resource "google_cloud_run_v2_service" "app" {
       }
 
       env {
-        name  = "PORT"
-        value = "4000"
-      }
-
-      env {
         name  = "MIX_ENV"
         value = "prod"
       }
