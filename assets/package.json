@@ -1,5 +1,17 @@
 {
+  "name": "social-content-generator",
+  "private": true,
   "dependencies": {
-    "heroicons": "^2.2.0"
+    "phoenix": "1.7.21",
+    "phoenix_html": "4.2.1",
+    "phoenix_live_view": "1.0.11",
+    "topbar": "3.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.4",
+    "esbuild-copy-static-files": "0.1.0",
+    "tailwindcss": "4.1.5",
+    "@tailwindcss/cli": "4.1.5",
+    "@tailwindcss/postcss": "4.1.5"
   }
 }
