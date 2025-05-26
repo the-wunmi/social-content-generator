@@ -15,9 +15,8 @@ terraform {
 }
 
 provider "google" {
-  project                     = var.project_id
-  region                      = var.region
-  impersonate_service_account = "terraform-sa@${var.project_id}.iam.gserviceaccount.com"
+  project = var.project_id
+  region  = var.region
 }
 
 # Enable required APIs
