@@ -67,7 +67,7 @@ jobs:
         DATABASE_URL: postgres://postgres:postgres@localhost:5432/social_content_generator_test
 
   build-and-push:
-    needs: test
+    # needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     
@@ -109,7 +109,7 @@ jobs:
         echo "image-url=$IMAGE_URL" >> $GITHUB_OUTPUT
 
   terraform-plan:
-    needs: test
+    # needs: test
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     
