@@ -165,7 +165,10 @@
               <p :if={automation.integration} class="text-xs text-gray-400">
                 {automation.integration.name}
               </p>
-              <p :if={!automation.integration && automation.output_type == "social_post"} class="text-xs text-gray-400">
+              <p
+                :if={!automation.integration && automation.output_type == "social_post"}
+                class="text-xs text-gray-400"
+              >
                 No platform configured
               </p>
             </div>
@@ -223,26 +226,26 @@
           </div>
 
           <div class="bg-gray-50 rounded-lg p-3 mb-3">
-                          <div id={"content-display-#{output.id}"}>
-                <pre
-                  :if={automation.output_type == "email"}
-                  id={"content-#{output.id}"}
-                  class="text-sm text-gray-700 whitespace-pre-line m-0 p-0"
-                >{output.content |> String.trim() |> String.replace(~r/\s+/, " ") |> String.replace(" \n", "\n")}</pre>
-                <p
-                  :if={automation.output_type == "social_post"}
-                  id={"content-#{output.id}"}
-                  class="text-sm text-gray-900 whitespace-pre-line m-0 p-0 leading-relaxed"
-                >
-                  {output.content |> String.trim() |> String.replace(~r/\s+/, " ") |> String.replace(" \n", "\n")}
-                </p>
-              </div>
+            <div id={"content-display-#{output.id}"}>
+              <pre
+                :if={automation.output_type == "email"}
+                id={"content-#{output.id}"}
+                class="text-sm text-gray-700 whitespace-pre-line m-0 p-0"
+              >{output.content |> String.trim()}</pre>
+              <p
+                :if={automation.output_type == "social_post"}
+                id={"content-#{output.id}"}
+                class="text-sm text-gray-900 whitespace-pre-line m-0 p-0 leading-relaxed"
+              >
+                {output.content |> String.trim()}
+              </p>
+            </div>
             <div id={"content-edit-#{output.id}"} style="display: none;">
               <textarea
                 id={"content-textarea-#{output.id}"}
                 class="w-full text-sm text-gray-700 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 rows={if automation.output_type == "email", do: "6", else: "4"}
-              >{String.trim(output.content)}</textarea>
+              >{output.content |> String.trim()}</textarea>
             </div>
           </div>
 
@@ -317,7 +320,10 @@
                 Cancel
               </button>
               <.link
-                :if={automation.output_type == "social_post" && output.status == "draft" && automation.integration}
+                :if={
+                  automation.output_type == "social_post" && output.status == "draft" &&
+                    automation.integration
+                }
                 href={~p"/meetings/#{@meeting.id}/automation_outputs/#{output.id}/post"}
                 method="post"
                 class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"

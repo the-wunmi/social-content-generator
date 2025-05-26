@@ -1,0 +1,43 @@
+# Git
+.git
+.gitignore
+README.md
+
+# Mix artifacts
+/_build
+/deps
+*.ez
+
+# Generated on crash by the VM
+erl_crash.dump
+
+# Generated on crash by NPM
+npm-debug.log
+
+# Static artifacts
+/assets/node_modules
+
+# Since we are building assets with npm, we don't need
+# the assets/vendor directory or its contents.
+/assets/vendor
+
+# Ignore package tarball (built via "mix hex.build").
+social_content_generator-*.tar
+
+# Temporary files
+.DS_Store
+.vscode
+.idea
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# CI/CD
+.github
+terraform
+*.md
+
+# Logs
+*.log 

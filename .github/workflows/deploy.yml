@@ -1,0 +1,75 @@
+name: Deploy to Google Cloud Run
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ secrets.GCP_REGION }}
+  SERVICE_NAME: ${{ secrets.APP_NAME }}
+  REGISTRY: ${{ secrets.GCP_REGION }}-docker.pkg.dev
+  REPOSITORY: ${{ secrets.APP_NAME }}-repo
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    # Add "id-token" with the intended permissions.
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Authenticate to Google Cloud
+      id: auth
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+        service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+
+    - name: Configure Docker to use gcloud as a credential helper
+      run: |
+        gcloud auth configure-docker $REGISTRY
+
+    - name: Build Docker image
+      run: |
+        docker build -t $REGISTRY/$PROJECT_ID/$REPOSITORY/$SERVICE_NAME:$GITHUB_SHA .
+        docker tag $REGISTRY/$PROJECT_ID/$REPOSITORY/$SERVICE_NAME:$GITHUB_SHA $REGISTRY/$PROJECT_ID/$REPOSITORY/$SERVICE_NAME:latest
+
+    - name: Push Docker image
+      run: |
+        docker push $REGISTRY/$PROJECT_ID/$REPOSITORY/$SERVICE_NAME:$GITHUB_SHA
+        docker push $REGISTRY/$PROJECT_ID/$REPOSITORY/$SERVICE_NAME:latest
+
+    - name: Deploy to Cloud Run
+      run: |
+        gcloud run deploy $SERVICE_NAME \
+          --image $REGISTRY/$PROJECT_ID/$REPOSITORY/$SERVICE_NAME:$GITHUB_SHA \
+          --region $REGION \
+          --platform managed \
+          --allow-unauthenticated \
+          --set-env-vars="MIX_ENV=prod,PHX_HOST=${{ secrets.APP_DOMAIN }},PORT=4000" \
+          --set-secrets="DATABASE_URL=$SERVICE_NAME-database-url:latest,SECRET_KEY_BASE=$SERVICE_NAME-secret-key-base:latest,OPENAI_API_KEY=$SERVICE_NAME-openai-api-key:latest,GOOGLE_OAUTH_CLIENT_ID=$SERVICE_NAME-google-oauth-client-id:latest,GOOGLE_OAUTH_CLIENT_SECRET=$SERVICE_NAME-google-oauth-client-secret:latest,RECALL_API_KEY=$SERVICE_NAME-recall-api-key:latest" \
+          --memory=512Mi \
+          --cpu=1 \
+          --min-instances=0 \
+          --max-instances=10
+
+    - name: Get service URL
+      run: |
+        SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --region=$REGION --format='value(status.url)')
+        echo "Service deployed at: $SERVICE_URL"
+        echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
+
+    - name: Test deployment
+      run: |
+        curl -f $SERVICE_URL || exit 1 
