@@ -21,7 +21,7 @@ defmodule SocialContentGeneratorWeb.Router do
   scope "/", SocialContentGeneratorWeb do
     pipe_through :browser
 
-    get "/", SessionController, :login
+    get "/", SessionController, :index
     get "/login", SessionController, :login
     delete "/logout", SessionController, :delete
 

@@ -74,7 +74,7 @@ defmodule SocialContentGeneratorWeb.CalendarController do
   end
 
   def update(conn, %{"id" => event_id, "calendar_event" => event_params}) do
-    case Calendars.get_calendar_event(event_id: event_id, user_id: conn.assigns.current_user.id) do
+    case Calendars.get_calendar_event(id: event_id, user_id: conn.assigns.current_user.id) do
       nil ->
         conn
         |> put_flash(:error, "Event not found")

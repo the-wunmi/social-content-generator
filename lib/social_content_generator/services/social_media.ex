@@ -8,23 +8,23 @@ defmodule SocialContentGenerator.Services.SocialMedia do
   require Logger
 
   def generate_post_content(meeting_data, automation_data) do
-    Logger.info("📱 SocialMedia.generate_post_content called")
-    Logger.info("📝 Meeting: #{meeting_data.id} - #{meeting_data.calendar_event.title}")
-    Logger.info("🤖 Automation: #{automation_data.name} (#{automation_data.output_type})")
-    Logger.info("🔗 Integration: #{automation_data.integration.provider}")
+    Logger.info("SocialMedia.generate_post_content called")
+    Logger.info("Meeting: #{meeting_data.id} - #{meeting_data.calendar_event.title}")
+    Logger.info("Automation: #{automation_data.name} (#{automation_data.output_type})")
+    Logger.info("Integration: #{automation_data.integration.provider}")
 
     case OpenAI.generate_social_post(meeting_data, automation_data) do
       {:ok, content} ->
-        Logger.info("✅ OpenAI generated content successfully")
-        Logger.info("📏 Content length: #{String.length(content)} characters")
+        Logger.info("OpenAI generated content successfully")
+        Logger.info("Content length: #{String.length(content)} characters")
         content
     end
   end
 
   def post_to_linkedin(content, access_token) do
-    Logger.info("📤 Posting to LinkedIn")
-    Logger.info("📏 Content length: #{String.length(content)} characters")
-    Logger.info("🔑 Access token present: #{!is_nil(access_token)}")
+    Logger.info("Posting to LinkedIn")
+    Logger.info("Content length: #{String.length(content)} characters")
+    Logger.info("Access token present: #{!is_nil(access_token)}")
 
     # Implement LinkedIn posting logic here
     # This would use the LinkedIn API to post the content
@@ -38,28 +38,28 @@ defmodule SocialContentGenerator.Services.SocialMedia do
         text: content
       })
 
-    Logger.info("🌐 Making LinkedIn API request")
+    Logger.info("Making LinkedIn API request")
 
     case HTTPoison.post("https://api.linkedin.com/v2/ugcPosts", body, headers) do
       {:ok, %{status_code: 201}} ->
-        Logger.info("✅ Successfully posted to LinkedIn")
+        Logger.info("Successfully posted to LinkedIn")
         {:ok, "Posted to LinkedIn"}
 
       {:ok, %{status_code: status_code, body: response_body}} ->
-        Logger.error("❌ LinkedIn API error: #{status_code}")
-        Logger.error("📄 Response: #{response_body}")
+        Logger.error("LinkedIn API error: #{status_code}")
+        Logger.error("Response: #{response_body}")
         {:error, "Failed to post to LinkedIn: #{status_code} - #{response_body}"}
 
       {:error, %{reason: reason}} ->
-        Logger.error("❌ LinkedIn HTTP error: #{reason}")
+        Logger.error("LinkedIn HTTP error: #{reason}")
         {:error, "Failed to post to LinkedIn: #{reason}"}
     end
   end
 
   def post_to_facebook(content, access_token) do
-    Logger.info("📤 Posting to Facebook")
-    Logger.info("📏 Content length: #{String.length(content)} characters")
-    Logger.info("🔑 Access token present: #{!is_nil(access_token)}")
+    Logger.info("Posting to Facebook")
+    Logger.info("Content length: #{String.length(content)} characters")
+    Logger.info("Access token present: #{!is_nil(access_token)}")
 
     # Implement Facebook posting logic here
     # This would use the Facebook API to post the content
@@ -73,31 +73,31 @@ defmodule SocialContentGenerator.Services.SocialMedia do
         message: content
       })
 
-    Logger.info("🌐 Making Facebook API request")
+    Logger.info("Making Facebook API request")
 
     case HTTPoison.post("https://graph.facebook.com/v18.0/me/feed", body, headers) do
       {:ok, %{status_code: 200}} ->
-        Logger.info("✅ Successfully posted to Facebook")
+        Logger.info("Successfully posted to Facebook")
         {:ok, "Posted to Facebook"}
 
       {:ok, %{status_code: status_code, body: response_body}} ->
-        Logger.error("❌ Facebook API error: #{status_code}")
-        Logger.error("📄 Response: #{response_body}")
+        Logger.error("Facebook API error: #{status_code}")
+        Logger.error("Response: #{response_body}")
         {:error, "Failed to post to Facebook: #{status_code} - #{response_body}"}
 
       {:error, %{reason: reason}} ->
-        Logger.error("❌ Facebook HTTP error: #{reason}")
+        Logger.error("Facebook HTTP error: #{reason}")
         {:error, "Failed to post to Facebook: #{reason}"}
     end
   end
 
   def generate_post(meeting_id, automation_id) do
-    Logger.info("🚀 SocialMedia.generate_post called")
-    Logger.info("📝 Meeting ID: #{meeting_id}")
-    Logger.info("🤖 Automation ID: #{automation_id}")
+    Logger.info("SocialMedia.generate_post called")
+    Logger.info("Meeting ID: #{meeting_id}")
+    Logger.info("Automation ID: #{automation_id}")
 
     result = SocialPost.generate_post(meeting_id, automation_id)
-    Logger.info("✅ SocialPost.generate_post result: #{inspect(result)}")
+    Logger.info("SocialPost.generate_post result: #{inspect(result)}")
     result
   end
 end

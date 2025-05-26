@@ -39,6 +39,9 @@ defmodule SocialContentGenerator.Workers.MeetingWorker do
   end
 
   defp generate_automation_outputs(meeting) do
+    # Preload meeting with necessary associations
+    meeting = Repo.preload(meeting, [:calendar_event, :attendees, :bot, :integration])
+
     # Get all active automations for the user
     automations =
       from(a in Automation,
@@ -47,56 +50,78 @@ defmodule SocialContentGenerator.Workers.MeetingWorker do
       )
       |> Repo.all()
 
+    Logger.info("Found #{length(automations)} active automations for user #{meeting.user_id}")
+
     # Generate outputs for each automation
     Enum.each(automations, fn automation ->
+      Logger.info("Processing automation: #{automation.name} (#{automation.output_type})")
+
       case automation.output_type do
         "social_post" ->
-          generate_social_post(meeting, automation)
+          case generate_social_post(meeting, automation) do
+            {:ok, output} ->
+              Logger.info("Generated social post output #{output.id}")
+
+            {:error, reason} ->
+              Logger.error("Failed to generate social post: #{inspect(reason)}")
+          end
 
         "email" ->
-          generate_email(meeting, automation)
+          case generate_email(meeting, automation) do
+            {:ok, output} ->
+              Logger.info("Generated email output #{output.id}")
+
+            {:error, reason} ->
+              Logger.error("Failed to generate email: #{inspect(reason)}")
+          end
 
         _ ->
           Logger.warning("Unsupported automation output type: #{automation.output_type}")
-          {:error, "Unsupported automation output type"}
       end
     end)
   end
 
   defp generate_social_post(meeting, automation) do
-    post_content = SocialMedia.generate_post_content(meeting, automation)
+    try do
+      post_content = SocialMedia.generate_post_content(meeting, automation)
 
-    %AutomationOutput{}
-    |> AutomationOutput.changeset(%{
-      content: post_content,
-      output_type: "social_post",
-      status: "draft",
-      user_id: meeting.user_id,
-      meeting_id: meeting.id,
-      automation_id: automation.id,
-      metadata: %{
-        platform: automation.integration.provider
-      }
-    })
-    |> Repo.insert()
+      %AutomationOutput{}
+      |> AutomationOutput.changeset(%{
+        content: post_content,
+        output_type: "social_post",
+        status: "draft",
+        user_id: meeting.user_id,
+        meeting_id: meeting.id,
+        automation_id: automation.id
+      })
+      |> Repo.insert()
+    rescue
+      error ->
+        Logger.error(
+          "Failed to generate social post for meeting #{meeting.id}: #{inspect(error)}"
+        )
+
+        {:error, error}
+    end
   end
 
   defp generate_email(meeting, automation) do
-    email_content = Email.generate_email_content(meeting, automation)
+    case Email.generate_email_content(meeting, automation) do
+      {:ok, email_content} ->
+        %AutomationOutput{}
+        |> AutomationOutput.changeset(%{
+          content: email_content,
+          output_type: "email",
+          status: "draft",
+          user_id: meeting.user_id,
+          meeting_id: meeting.id,
+          automation_id: automation.id
+        })
+        |> Repo.insert()
 
-    %AutomationOutput{}
-    |> AutomationOutput.changeset(%{
-      content: email_content,
-      output_type: "email",
-      status: "draft",
-      user_id: meeting.user_id,
-      meeting_id: meeting.id,
-      automation_id: automation.id,
-      metadata: %{
-        to: meeting.attendees |> Enum.map(& &1.email) |> Enum.join(", "),
-        subject: "Follow-up: #{meeting.title}"
-      }
-    })
-    |> Repo.insert()
+      {:error, reason} ->
+        Logger.error("Failed to generate email for meeting #{meeting.id}: #{reason}")
+        {:error, reason}
+    end
   end
 end

@@ -165,6 +165,9 @@
               <p :if={automation.integration} class="text-xs text-gray-400">
                 {automation.integration.name}
               </p>
+              <p :if={!automation.integration && automation.output_type == "social_post"} class="text-xs text-gray-400">
+                No platform configured
+              </p>
             </div>
             <div class="ml-2 flex-shrink-0">
               <svg
@@ -314,7 +317,7 @@
                 Cancel
               </button>
               <.link
-                :if={automation.output_type == "social_post" && output.status == "draft"}
+                :if={automation.output_type == "social_post" && output.status == "draft" && automation.integration}
                 href={~p"/meetings/#{@meeting.id}/automation_outputs/#{output.id}/post"}
                 method="post"
                 class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
