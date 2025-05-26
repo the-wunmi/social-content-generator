@@ -155,7 +155,7 @@ jobs:
       working-directory: ./terraform
 
   terraform-apply:
-    needs: [build-and-push]
+    # needs: [build-and-push]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     
