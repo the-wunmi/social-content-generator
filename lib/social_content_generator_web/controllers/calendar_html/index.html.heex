@@ -264,7 +264,7 @@
                 <% end %>
               </div>
               
-              <!-- Note Taker Toggle -->
+<!-- Note Taker Toggle -->
               <%= if event.meeting_url do %>
                 <% is_past_event = DateTime.compare(event.end_time, DateTime.utc_now()) == :lt %>
                 <div class="ml-6 flex-shrink-0">
