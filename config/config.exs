@@ -25,6 +25,7 @@ config :social_content_generator,
 
 # Configures the endpoint
 config :social_content_generator, SocialContentGeneratorWeb.Endpoint,
+  server: true,
   url: [host: "localhost"],
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
