@@ -201,7 +201,7 @@ jobs:
       working-directory: ./terraform
 
   deploy:
-    needs: [terraform-apply]
+    # needs: [terraform-apply]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     
