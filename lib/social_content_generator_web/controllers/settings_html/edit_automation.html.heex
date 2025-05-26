@@ -1,0 +1,131 @@
+<div class="max-w-3xl mx-auto py-6 sm:px-6 lg:px-8">
+  <div class="px-4 py-6 sm:px-0">
+    <div class="mb-6">
+      <h1 class="text-3xl font-bold text-gray-900">Edit Automation</h1>
+      <p class="mt-2 text-sm text-gray-600">
+        Update your automation settings.
+      </p>
+    </div>
+
+    <.form :let={f} for={@changeset} action={~p"/settings/automations/#{@automation.id}"} method="put" class="space-y-6">
+      <div class="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+        <div class="md:grid md:grid-cols-3 md:gap-6">
+          <div class="md:col-span-1">
+            <h3 class="text-lg font-medium leading-6 text-gray-900">Basic Information</h3>
+            <p class="mt-1 text-sm text-gray-500">
+              Update the name and description.
+            </p>
+          </div>
+          <div class="mt-5 md:mt-0 md:col-span-2">
+            <div class="grid grid-cols-6 gap-6">
+              <div class="col-span-6">
+                <.input field={f[:name]} type="text" label="Name" required />
+              </div>
+              <div class="col-span-6">
+                <.input field={f[:description]} type="textarea" label="Description" rows="3" required />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+        <div class="md:grid md:grid-cols-3 md:gap-6">
+          <div class="md:col-span-1">
+            <h3 class="text-lg font-medium leading-6 text-gray-900">Content Type</h3>
+            <p class="mt-1 text-sm text-gray-500">
+              Choose what type of content to generate. This is very important for the AI.
+            </p>
+          </div>
+          <div class="mt-5 md:mt-0 md:col-span-2">
+            <div class="space-y-4">
+              <div>
+                <label class="text-base font-medium text-gray-900">What type of content should be generated?</label>
+                <fieldset class="mt-4">
+                  <div class="space-y-4">
+                    <div class="flex items-center">
+                      <input id="social_post" name="automation[output_type]" type="radio" value="social_post" checked={@automation.output_type == "social_post"} class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300" />
+                      <label for="social_post" class="ml-3 block text-sm font-medium text-gray-700">
+                        Social Media Post
+                      </label>
+                    </div>
+                    <div class="flex items-center">
+                      <input id="email" name="automation[output_type]" type="radio" value="email" checked={@automation.output_type == "email"} class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300" />
+                      <label for="email" class="ml-3 block text-sm font-medium text-gray-700">
+                        Follow-up Email
+                      </label>
+                    </div>
+                  </div>
+                </fieldset>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="platform-selection" class="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6" style={if @automation.output_type == "social_post", do: "display: block;", else: "display: none;"}>
+        <div class="md:grid md:grid-cols-3 md:gap-6">
+          <div class="md:col-span-1">
+            <h3 class="text-lg font-medium leading-6 text-gray-900">Platform</h3>
+            <p class="mt-1 text-sm text-gray-500">
+              Select which social media platform to post to.
+            </p>
+          </div>
+          <div class="mt-5 md:mt-0 md:col-span-2">
+            <.input field={f[:integration_id]} type="select" label="Social Media Platform" options={Enum.map(@integrations, &{&1.name, &1.id})} prompt="Choose a platform" />
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+        <div class="md:grid md:grid-cols-3 md:gap-6">
+          <div class="md:col-span-1">
+            <h3 class="text-lg font-medium leading-6 text-gray-900">Example Output</h3>
+            <p class="mt-1 text-sm text-gray-500">
+              Provide an example of the content you want the AI to generate. This guides the AI's output style and format.
+            </p>
+          </div>
+          <div class="mt-5 md:mt-0 md:col-span-2">
+            <.input field={f[:example_output]} type="textarea" label="Example Output" rows="6" placeholder="Provide an example of the content you want generated..." required />
+            <p class="mt-2 text-sm text-gray-500">
+              Be specific about tone, length, format, and any key elements you want included.
+            </p>
+          </div>
+        </div>
+      </div>
+
+
+
+      <div class="flex justify-end">
+        <.link navigate={~p"/settings/automations"} class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+          Cancel
+        </.link>
+        <button type="submit" class="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+          Update Automation
+        </button>
+      </div>
+    </.form>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const socialPostRadio = document.getElementById('social_post');
+    const emailRadio = document.getElementById('email');
+    const platformSection = document.getElementById('platform-selection');
+    
+    function togglePlatformSection() {
+      if (socialPostRadio.checked) {
+        platformSection.style.display = 'block';
+      } else {
+        platformSection.style.display = 'none';
+      }
+    }
+    
+    socialPostRadio.addEventListener('change', togglePlatformSection);
+    emailRadio.addEventListener('change', togglePlatformSection);
+    
+    // Initial state
+    togglePlatformSection();
+  });
+</script> 

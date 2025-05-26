@@ -73,5 +73,13 @@ config :social_content_generator, :api_keys,
   recall_api_key: System.get_env("RECALL_API_KEY") || "test_recall_api_key",
   openai_api_key: System.get_env("OPENAI_API_KEY") || "test_openai_api_key"
 
+# Test AI Configuration
+config :social_content_generator, :ai,
+  provider: "openai",
+  openai_api_key: "test_openai_api_key",
+  model: "gpt-4",
+  max_tokens: 500,
+  temperature: 0.7
+
 # Bot configuration for testing
 config :social_content_generator, :bot, join_offset_minutes: 1

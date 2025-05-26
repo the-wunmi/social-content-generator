@@ -15,11 +15,15 @@ defmodule SocialContentGenerator.Workers.EmailWorker do
   def perform(%Oban.Job{args: %{"automation_output_id" => automation_output_id}}) do
     automation_output =
       Repo.get!(AutomationOutput, automation_output_id)
-      |> Repo.preload(automation: :user)
+      |> Repo.preload(automation: :user, meeting: [:attendees, :calendar_event])
+
+    # Generate email recipients and subject dynamically
+    to_emails = automation_output.meeting.attendees |> Enum.map(& &1.email) |> Enum.join(", ")
+    subject = "Follow-up: #{automation_output.meeting.calendar_event.title}"
 
     case Email.send_email(
-           automation_output.metadata["to"],
-           automation_output.metadata["subject"],
+           to_emails,
+           subject,
            automation_output.content,
            automation_output.automation.user.email,
            automation_output.automation.user.smtp_config

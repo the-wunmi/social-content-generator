@@ -10,6 +10,7 @@ defmodule SocialContentGenerator.Calendars.GoogleCalendar do
   alias SocialContentGenerator.Calendars.CalendarEventAttendee
   alias SocialContentGenerator.Users.UserIntegration
   alias SocialContentGenerator.Repo
+  alias SocialContentGenerator.Services.OAuth
   import Ecto.Query
 
   @doc """
@@ -209,8 +210,6 @@ defmodule SocialContentGenerator.Calendars.GoogleCalendar do
   end
 
   defp refresh_token_if_needed(%UserIntegration{} = user_integration) do
-    alias SocialContentGenerator.Services.OAuth
-
     case OAuth.refresh_token(user_integration) do
       {:ok, token_data} ->
         attrs = %{

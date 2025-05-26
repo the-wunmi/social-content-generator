@@ -8,13 +8,13 @@ defmodule SocialContentGenerator.Workers.MeetingWorker do
     max_attempts: 3
 
   alias SocialContentGenerator.Meetings
-  alias SocialContentGenerator.Services.Recall
   alias SocialContentGenerator.Services.SocialMedia
   alias SocialContentGenerator.Services.Email
   alias SocialContentGenerator.Repo
   alias SocialContentGenerator.Automations.AutomationOutput
   alias SocialContentGenerator.Automations.Automation
   import Ecto.Query
+  require Logger
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"meeting_id" => meeting_id}}) do
@@ -57,6 +57,7 @@ defmodule SocialContentGenerator.Workers.MeetingWorker do
           generate_email(meeting, automation)
 
         _ ->
+          Logger.warning("Unsupported automation output type: #{automation.output_type}")
           {:error, "Unsupported automation output type"}
       end
     end)

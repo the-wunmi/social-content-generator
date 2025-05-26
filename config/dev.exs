@@ -117,6 +117,16 @@ config :social_content_generator, :api_keys,
   recall_api_key: System.get_env("RECALL_API_KEY"),
   openai_api_key: System.get_env("OPENAI_API_KEY")
 
+# AI Configuration - supports OpenAI and other compatible vendors
+config :social_content_generator, :ai,
+  # API Configuration
+  openai_api_key: System.get_env("OPENAI_API_KEY"),
+  base_url: System.get_env("OPENAI_BASE_URL"),
+  # Model Configuration
+  model: System.get_env("OPENOPENAI_MODEL") || "gpt-4",
+  max_tokens: String.to_integer(System.get_env("OPENOPENAI_MAX_TOKENS") || "500"),
+  temperature: String.to_float(System.get_env("OPENOPENAI_TEMPERATURE") || "0.7")
+
 # Bot configuration
 config :social_content_generator, :bot,
   join_offset_minutes: String.to_integer(System.get_env("BOT_JOIN_OFFSET_MINUTES") || "5")

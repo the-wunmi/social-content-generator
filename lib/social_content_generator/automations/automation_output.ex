@@ -7,7 +7,6 @@ defmodule SocialContentGenerator.Automations.AutomationOutput do
     field :content, :string
     field :output_type, :string
     field :status, :string, default: "draft"
-    field :metadata, :map, default: %{}
     field :deleted_at, :utc_datetime
 
     belongs_to :user, SocialContentGenerator.Users.User
@@ -27,7 +26,6 @@ defmodule SocialContentGenerator.Automations.AutomationOutput do
       :content,
       :output_type,
       :status,
-      :metadata,
       :user_id,
       :automation_id,
       :meeting_id,

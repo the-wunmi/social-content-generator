@@ -30,32 +30,28 @@ defmodule SocialContentGeneratorWeb.OAuthController do
     end
   end
 
-  def linkedin_callback(conn, %{"code" => code}) do
-    with {:ok, token_data} <- OAuth.linkedin_exchange_code(code),
-         {:ok, _integration} <-
-           create_or_update_user_integration(conn.assigns.current_user, "linkedin", token_data) do
-      conn
-      |> put_flash(:info, "Successfully connected to LinkedIn")
-      |> redirect(to: ~p"/calendar")
-    else
-      {:error, reason} ->
-        conn
-        |> put_flash(:error, "Failed to connect to LinkedIn: #{reason}")
-        |> redirect(to: ~p"/calendar")
-    end
-  end
+  def oauth_callback(conn, %{"provider" => provider, "code" => code}) do
+    exchange_function =
+      case provider do
+        "linkedin" -> &OAuth.linkedin_exchange_code/1
+        "facebook" -> &OAuth.facebook_exchange_code/1
+        _ -> fn _ -> {:error, "Unsupported provider: #{provider}"} end
+      end
 
-  def facebook_callback(conn, %{"code" => code}) do
-    with {:ok, token_data} <- OAuth.facebook_exchange_code(code),
+    with {:ok, token_data} <- exchange_function.(code),
          {:ok, _integration} <-
-           create_or_update_user_integration(conn.assigns.current_user, "facebook", token_data) do
+           create_or_update_user_integration(conn.assigns.current_user, provider, token_data) do
+      provider_name = String.capitalize(provider)
+
       conn
-      |> put_flash(:info, "Successfully connected to Facebook")
+      |> put_flash(:info, "Successfully connected to #{provider_name}")
       |> redirect(to: ~p"/calendar")
     else
       {:error, reason} ->
+        provider_name = String.capitalize(provider)
+
         conn
-        |> put_flash(:error, "Failed to connect to Facebook: #{reason}")
+        |> put_flash(:error, "Failed to connect to #{provider_name}: #{reason}")
         |> redirect(to: ~p"/calendar")
     end
   end

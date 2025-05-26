@@ -4,6 +4,7 @@ defmodule SocialContentGeneratorWeb.CalendarController do
   alias SocialContentGenerator.Calendars
   alias SocialContentGenerator.Integrations
   alias SocialContentGenerator.Services.OAuth
+  alias SocialContentGenerator.Integrations
 
   def index(conn, params) do
     user_id = conn.assigns.current_user.id
@@ -28,13 +29,33 @@ defmodule SocialContentGeneratorWeb.CalendarController do
     end
   end
 
-  def connect_google_calendar(conn, _params) do
-    redirect_uri = unverified_url(conn, ~p"/calendar/google/callback")
-    auth_url = OAuth.google_auth_url(redirect_uri, :calendar)
-    redirect(conn, external: auth_url)
+  def connect_calendar(conn, %{"provider" => provider}) do
+    case provider do
+      "google" ->
+        redirect_uri = unverified_url(conn, ~p"/calendar/#{provider}/callback")
+        auth_url = OAuth.google_auth_url(redirect_uri, :calendar)
+        redirect(conn, external: auth_url)
+
+      _ ->
+        conn
+        |> put_flash(:error, "Unsupported calendar provider: #{provider}")
+        |> redirect(to: ~p"/calendar")
+    end
   end
 
-  def google_calendar_callback(conn, %{"code" => code}) do
+  def calendar_callback(conn, %{"provider" => provider, "code" => code}) do
+    case provider do
+      "google" ->
+        handle_google_calendar_callback(conn, code)
+
+      _ ->
+        conn
+        |> put_flash(:error, "Unsupported calendar provider: #{provider}")
+        |> redirect(to: ~p"/calendar")
+    end
+  end
+
+  defp handle_google_calendar_callback(conn, code) do
     redirect_uri = unverified_url(conn, ~p"/calendar/google/callback")
 
     with {:ok, token_data} <- OAuth.google_exchange_code(code, redirect_uri),
@@ -70,7 +91,7 @@ defmodule SocialContentGeneratorWeb.CalendarController do
           normalized_params = normalize_event_params(event_params)
 
           case Calendars.update_calendar_event(event, normalized_params) do
-            {:ok, updated_event} ->
+            {:ok, _updated_event} ->
               message =
                 case normalized_params["note_taker_enabled"] do
                   true -> "Note taker enabled"
@@ -103,8 +124,6 @@ defmodule SocialContentGeneratorWeb.CalendarController do
   end
 
   defp create_google_calendar_integration(user, token_data, _user_info) do
-    alias SocialContentGenerator.Integrations
-
     # Get the Google Calendar integration
     integration = Integrations.get_integration(slug: "google-calendar")
 

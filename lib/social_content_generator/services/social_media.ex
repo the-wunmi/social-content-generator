@@ -4,24 +4,28 @@ defmodule SocialContentGenerator.Services.SocialMedia do
   """
 
   alias SocialContentGenerator.Social.SocialPost
+  alias SocialContentGenerator.Services.OpenAI
+  require Logger
 
   def generate_post_content(meeting_data, automation_data) do
-    # TODO This is a placeholder for AI-generated content
-    # In a real implementation, this would use an AI service to analyze the transcript
-    # and generate appropriate social media content
-    """
-    Just wrapped up an insightful meeting with #{meeting_data.attendees |> Enum.map(& &1.name) |> Enum.join(", ")}!
+    Logger.info("📱 SocialMedia.generate_post_content called")
+    Logger.info("📝 Meeting: #{meeting_data.id} - #{meeting_data.calendar_event.title}")
+    Logger.info("🤖 Automation: #{automation_data.name} (#{automation_data.output_type})")
+    Logger.info("🔗 Integration: #{automation_data.integration.provider}")
 
-    Key takeaways:
-    - Discussed important topics
-    - Made significant progress
-    - Set clear next steps
-
-    Looking forward to implementing these ideas! #BusinessMeeting #ProfessionalDevelopment
-    """
+    case OpenAI.generate_social_post(meeting_data, automation_data) do
+      {:ok, content} ->
+        Logger.info("✅ OpenAI generated content successfully")
+        Logger.info("📏 Content length: #{String.length(content)} characters")
+        content
+    end
   end
 
   def post_to_linkedin(content, access_token) do
+    Logger.info("📤 Posting to LinkedIn")
+    Logger.info("📏 Content length: #{String.length(content)} characters")
+    Logger.info("🔑 Access token present: #{!is_nil(access_token)}")
+
     # Implement LinkedIn posting logic here
     # This would use the LinkedIn API to post the content
     headers = [
@@ -34,19 +38,29 @@ defmodule SocialContentGenerator.Services.SocialMedia do
         text: content
       })
 
+    Logger.info("🌐 Making LinkedIn API request")
+
     case HTTPoison.post("https://api.linkedin.com/v2/ugcPosts", body, headers) do
       {:ok, %{status_code: 201}} ->
+        Logger.info("✅ Successfully posted to LinkedIn")
         {:ok, "Posted to LinkedIn"}
 
       {:ok, %{status_code: status_code, body: response_body}} ->
+        Logger.error("❌ LinkedIn API error: #{status_code}")
+        Logger.error("📄 Response: #{response_body}")
         {:error, "Failed to post to LinkedIn: #{status_code} - #{response_body}"}
 
       {:error, %{reason: reason}} ->
+        Logger.error("❌ LinkedIn HTTP error: #{reason}")
         {:error, "Failed to post to LinkedIn: #{reason}"}
     end
   end
 
   def post_to_facebook(content, access_token) do
+    Logger.info("📤 Posting to Facebook")
+    Logger.info("📏 Content length: #{String.length(content)} characters")
+    Logger.info("🔑 Access token present: #{!is_nil(access_token)}")
+
     # Implement Facebook posting logic here
     # This would use the Facebook API to post the content
     headers = [
@@ -59,19 +73,31 @@ defmodule SocialContentGenerator.Services.SocialMedia do
         message: content
       })
 
+    Logger.info("🌐 Making Facebook API request")
+
     case HTTPoison.post("https://graph.facebook.com/v18.0/me/feed", body, headers) do
       {:ok, %{status_code: 200}} ->
+        Logger.info("✅ Successfully posted to Facebook")
         {:ok, "Posted to Facebook"}
 
       {:ok, %{status_code: status_code, body: response_body}} ->
+        Logger.error("❌ Facebook API error: #{status_code}")
+        Logger.error("📄 Response: #{response_body}")
         {:error, "Failed to post to Facebook: #{status_code} - #{response_body}"}
 
       {:error, %{reason: reason}} ->
+        Logger.error("❌ Facebook HTTP error: #{reason}")
         {:error, "Failed to post to Facebook: #{reason}"}
     end
   end
 
   def generate_post(meeting_id, automation_id) do
-    SocialPost.generate_post(meeting_id, automation_id)
+    Logger.info("🚀 SocialMedia.generate_post called")
+    Logger.info("📝 Meeting ID: #{meeting_id}")
+    Logger.info("🤖 Automation ID: #{automation_id}")
+
+    result = SocialPost.generate_post(meeting_id, automation_id)
+    Logger.info("✅ SocialPost.generate_post result: #{inspect(result)}")
+    result
   end
 end

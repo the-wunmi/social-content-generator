@@ -12,6 +12,7 @@ defmodule SocialContentGenerator.Workers.BotWorker do
   alias SocialContentGenerator.Repo
   alias SocialContentGenerator.Bots.Bot
   alias SocialContentGenerator.Meetings.MeetingAttendee
+  alias SocialContentGenerator.Calendars
   import Ecto.Query
   require Logger
 
@@ -44,8 +45,6 @@ defmodule SocialContentGenerator.Workers.BotWorker do
   def perform(%Oban.Job{
         args: %{"action" => "create_bot", "calendar_event_id" => calendar_event_id}
       }) do
-    alias SocialContentGenerator.Calendars
-
     case Calendars.get_calendar_event(calendar_event_id) do
       nil ->
         Logger.warning("Calendar event #{calendar_event_id} not found for bot creation")
@@ -153,7 +152,6 @@ defmodule SocialContentGenerator.Workers.BotWorker do
   end
 
   defp create_bot_for_calendar_event(calendar_event) do
-    alias SocialContentGenerator.Calendars
     calendar_event = Repo.preload(calendar_event, [:integration])
 
     case calendar_event.meeting_url do
@@ -161,7 +159,7 @@ defmodule SocialContentGenerator.Workers.BotWorker do
         Logger.warning("No meeting URL found for calendar event #{calendar_event.id}")
         {:error, "No meeting URL"}
 
-      meeting_url ->
+      _meeting_url ->
         # Get join offset from calendar event or default
         join_offset = calendar_event.join_offset_minutes || 5
 
@@ -299,13 +297,6 @@ defmodule SocialContentGenerator.Workers.BotWorker do
     |> Oban.insert()
   end
 
-  defp get_join_offset_minutes(event, user) do
-    # Priority: event setting > user setting > app config
-    event.join_offset_minutes ||
-      user.bot_join_offset_minutes ||
-      Application.get_env(:social_content_generator, :bot)[:join_offset_minutes]
-  end
-
   @doc """
   Cleans up a bot when note taker is disabled:
   1. Cancels any scheduled poll jobs
@@ -313,8 +304,6 @@ defmodule SocialContentGenerator.Workers.BotWorker do
   3. Soft deletes the bot in our database
   """
   def cleanup_bot_for_calendar_event(calendar_event_id) do
-    alias SocialContentGenerator.Calendars
-
     case Calendars.get_calendar_event(calendar_event_id) do
       %{bot_id: nil} ->
         # No bot to clean up

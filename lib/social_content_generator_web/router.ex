@@ -44,25 +44,25 @@ defmodule SocialContentGeneratorWeb.Router do
     put "/settings/bot", SettingsController, :update_bot_settings
 
     # OAuth routes
-    get "/auth/linkedin/callback", OAuthController, :linkedin_callback
-    get "/auth/facebook/callback", OAuthController, :facebook_callback
+    get "/auth/:provider/callback", OAuthController, :oauth_callback
 
     # Auth initiation routes
-    get "/settings/linkedin/auth", SettingsController, :linkedin_auth
-    get "/settings/facebook/auth", SettingsController, :facebook_auth
+    get "/settings/:provider/auth", SettingsController, :provider_auth
 
     # Calendar routes
     get "/calendar", CalendarController, :index
-    get "/calendar/google", CalendarController, :connect_google_calendar
-    get "/calendar/google/callback", CalendarController, :google_calendar_callback
+    get "/calendar/:provider", CalendarController, :connect_calendar
+    get "/calendar/:provider/callback", CalendarController, :calendar_callback
     patch "/calendar/events/:id", CalendarController, :update
 
     # Meeting routes
-    resources "/meetings", MeetingController, only: [:index, :show]
+    resources "/meetings", MeetingController, only: [:index, :show] do
+      post "/automations/:automation_id/generate", MeetingController, :generate_automation
 
-    post "/meetings/:meeting_id/automations/:automation_id/generate_post",
-         MeetingController,
-         :generate_post
+      resources "/automation_outputs", MeetingController, only: [:update] do
+        post "/post", MeetingController, :post_to_social_media
+      end
+    end
   end
 
   # Other scopes may use custom stacks.

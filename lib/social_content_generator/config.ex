@@ -82,6 +82,17 @@ defmodule SocialContentGenerator.Config do
     RECALL_API_KEY=your_recall_api_key
     OPENAI_API_KEY=your_openai_api_key
 
+    # AI Configuration (choose provider: openai or custom)
+    OPENAI_MODEL=gpt-4
+    OPENAI_MAX_TOKENS=500
+    OPENAI_TEMPERATURE=0.7
+
+    # Custom AI Provider Configuration (for non-OpenAI vendors)
+    # AI_BASE_URL=https://your-ai-provider.com/v1
+    #
+    # Example configuration matching the TypeScript example:
+    # AI_BASE_URL=https://your-vendor.openai.com/openai/deployments/your-deployment
+
     # SMTP Configuration (optional for development)
     SMTP_HOST=smtp.gmail.com
     SMTP_PORT=587

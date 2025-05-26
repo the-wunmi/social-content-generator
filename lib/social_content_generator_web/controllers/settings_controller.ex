@@ -5,6 +5,7 @@ defmodule SocialContentGeneratorWeb.SettingsController do
   alias SocialContentGenerator.Integrations
   alias SocialContentGenerator.Automations
   alias SocialContentGenerator.Users
+  alias SocialContentGenerator.Repo
 
   def index(conn, _params) do
     integrations =
@@ -14,12 +15,28 @@ defmodule SocialContentGeneratorWeb.SettingsController do
   end
 
   def automations(conn, _params) do
-    automations = Automations.list_automations(user_id: conn.assigns.current_user.id)
+    automations =
+      Automations.list_automations(user_id: conn.assigns.current_user.id)
+      |> Repo.preload([:integration])
+
     render(conn, :automations, automations: automations)
   end
 
   def new_automation(conn, _params) do
-    render(conn, :new_automation)
+    changeset =
+      SocialContentGenerator.Automations.Automation.changeset(
+        %SocialContentGenerator.Automations.Automation{},
+        %{}
+      )
+
+    # Get user's connected integrations for social media and email
+    integrations =
+      Integrations.list_integrations(user_id: conn.assigns.current_user.id)
+      |> Enum.filter(fn integration ->
+        "automation" in integration.scopes
+      end)
+
+    render(conn, :new_automation, changeset: changeset, integrations: integrations)
   end
 
   def create_automation(conn, %{"automation" => automation_params}) do
@@ -31,53 +48,121 @@ defmodule SocialContentGeneratorWeb.SettingsController do
         |> put_flash(:info, "Automation created successfully.")
         |> redirect(to: ~p"/settings/automations")
 
-      {:error, _changeset} ->
+      {:error, changeset} ->
+        # Get integrations again for the form
+        integrations =
+          Integrations.list_integrations(user_id: conn.assigns.current_user.id)
+          |> Enum.filter(fn integration ->
+            "automation" in integration.scopes
+          end)
+
         conn
         |> put_flash(:error, "Failed to create automation.")
-        |> render(:new_automation)
+        |> render(:new_automation, changeset: changeset, integrations: integrations)
     end
   end
 
   def edit_automation(conn, %{"id" => id}) do
     automation = Automations.get_automation(id: id, user_id: conn.assigns.current_user.id)
-    render(conn, :edit_automation, automation: automation)
+
+    case automation do
+      nil ->
+        conn
+        |> put_flash(:error, "Automation not found")
+        |> redirect(to: ~p"/settings/automations")
+
+      automation ->
+        changeset = SocialContentGenerator.Automations.Automation.changeset(automation, %{})
+
+        # Get user's connected integrations for social media and email
+        integrations =
+          Integrations.list_integrations(user_id: conn.assigns.current_user.id)
+          |> Enum.filter(fn integration ->
+            "automation" in integration.scopes
+          end)
+
+        render(conn, :edit_automation,
+          automation: automation,
+          changeset: changeset,
+          integrations: integrations
+        )
+    end
   end
 
   def update_automation(conn, %{"id" => id, "automation" => automation_params}) do
     automation = Automations.get_automation(id: id, user_id: conn.assigns.current_user.id)
 
-    case Automations.update_automation(automation, automation_params) do
-      {:ok, _automation} ->
+    case automation do
+      nil ->
         conn
-        |> put_flash(:info, "Automation updated successfully.")
+        |> put_flash(:error, "Automation not found")
         |> redirect(to: ~p"/settings/automations")
 
-      {:error, _changeset} ->
-        conn
-        |> put_flash(:error, "Failed to update automation.")
-        |> render(:edit_automation, automation: automation)
+      automation ->
+        case Automations.update_automation(automation, automation_params) do
+          {:ok, _automation} ->
+            conn
+            |> put_flash(:info, "Automation updated successfully.")
+            |> redirect(to: ~p"/settings/automations")
+
+          {:error, changeset} ->
+            # Get integrations again for the form
+            integrations =
+              Integrations.list_integrations(user_id: conn.assigns.current_user.id)
+              |> Enum.filter(fn integration ->
+                "automation" in integration.scopes
+              end)
+
+            conn
+            |> put_flash(:error, "Failed to update automation.")
+            |> render(:edit_automation,
+              automation: automation,
+              changeset: changeset,
+              integrations: integrations
+            )
+        end
     end
   end
 
   def delete_automation(conn, %{"id" => id}) do
     automation = Automations.get_automation(id: id, user_id: conn.assigns.current_user.id)
-    {:ok, _automation} = Automations.delete_automation(automation)
 
-    conn
-    |> put_flash(:info, "Automation deleted successfully.")
-    |> redirect(to: ~p"/settings/automations")
+    case automation do
+      nil ->
+        conn
+        |> put_flash(:error, "Automation not found")
+        |> redirect(to: ~p"/settings/automations")
+
+      automation ->
+        {:ok, _automation} = Automations.delete_automation(automation)
+
+        conn
+        |> put_flash(:info, "Automation deleted successfully.")
+        |> redirect(to: ~p"/settings/automations")
+    end
   end
 
   def google_auth(conn, _params) do
     redirect(conn, external: OAuth.google_auth_url())
   end
 
-  def linkedin_auth(conn, _params) do
-    redirect(conn, external: OAuth.linkedin_auth_url())
-  end
+  def provider_auth(conn, %{"provider" => provider}) do
+    auth_url =
+      case provider do
+        "linkedin" ->
+          OAuth.linkedin_auth_url()
 
-  def facebook_auth(conn, _params) do
-    redirect(conn, external: OAuth.facebook_auth_url())
+        "facebook" ->
+          OAuth.facebook_auth_url()
+
+        _ ->
+          conn
+          |> put_flash(:error, "Unsupported provider: #{provider}")
+          |> redirect(to: ~p"/settings")
+          |> halt()
+      end
+
+    redirect(conn, external: auth_url)
   end
 
   def bot_settings(conn, _params) do

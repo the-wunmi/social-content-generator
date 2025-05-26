@@ -5,8 +5,10 @@ defmodule SocialContentGenerator.Calendars do
 
   import Ecto.Query, warn: false
   alias SocialContentGenerator.Repo
-  alias SocialContentGenerator.Calendars.{CalendarEvent, CalendarEventAttendee}
+  alias SocialContentGenerator.Calendars.CalendarEvent
   alias SocialContentGenerator.Integrations
+  alias SocialContentGenerator.Workers.CalendarWorker
+  alias SocialContentGenerator.Workers.CalendarWorker
 
   @valid_filters [:id, :user_id, :deleted_at]
 
@@ -22,14 +24,40 @@ defmodule SocialContentGenerator.Calendars do
 
     if force_refresh do
       # Force immediate sync by calling CalendarWorker directly (ensures 100% consistency)
-      alias SocialContentGenerator.Workers.CalendarWorker
+      require Logger
 
       integrations
       |> Enum.each(fn user_integration ->
-        # Create a fake Oban job and call perform directly
         job = %Oban.Job{args: %{"user_integration_id" => user_integration.id}}
-        # TODO timeout after maybe 30s if slow, so handle events available already
-        CalendarWorker.perform(job)
+
+        # Wrap in Task.async with 30-second timeout
+        task = Task.async(fn -> CalendarWorker.perform(job) end)
+
+        try do
+          case Task.await(task, 30_000) do
+            :ok ->
+              Logger.info(
+                "Successfully synced calendar for user_integration #{user_integration.id}"
+              )
+
+            {:error, reason} ->
+              Logger.warning(
+                "Calendar sync failed for user_integration #{user_integration.id}: #{reason}"
+              )
+
+            other ->
+              Logger.info(
+                "Calendar sync completed for user_integration #{user_integration.id}: #{inspect(other)}"
+              )
+          end
+        catch
+          :exit, {:timeout, _} ->
+            Logger.warning(
+              "Calendar sync timed out after 30s for user_integration #{user_integration.id}, continuing with available events"
+            )
+
+            Task.shutdown(task, :brutal_kill)
+        end
       end)
 
       # After sync, get fresh events from database (same as normal flow)
@@ -108,14 +136,10 @@ defmodule SocialContentGenerator.Calendars do
   end
 
   defp schedule_background_sync(integrations) do
-    alias SocialContentGenerator.Workers.CalendarWorker
-
     # Schedule sync jobs with 1-minute delay to avoid immediate execution
     integrations
     |> Enum.each(fn user_integration ->
       %{"user_integration_id" => user_integration.id}
-      # 1 minute delay
-      # TODO change to 60s
       |> CalendarWorker.new(schedule_in: 5)
       |> Oban.insert()
     end)
