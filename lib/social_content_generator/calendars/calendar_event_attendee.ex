@@ -10,6 +10,7 @@ defmodule SocialContentGenerator.Calendars.CalendarEventAttendee do
     field :status, :string, default: "needs_action"
     field :deleted_at, :utc_datetime
 
+    belongs_to :user, SocialContentGenerator.Users.User
     belongs_to :calendar_event, SocialContentGenerator.Calendars.CalendarEvent
 
     timestamps()
@@ -21,11 +22,12 @@ defmodule SocialContentGenerator.Calendars.CalendarEventAttendee do
   @doc false
   def changeset(calendar_event_attendee, attrs) do
     calendar_event_attendee
-    |> cast(attrs, [:email, :name, :role, :status, :calendar_event_id, :deleted_at])
-    |> validate_required([:email, :calendar_event_id])
+    |> cast(attrs, [:email, :name, :role, :status, :user_id, :calendar_event_id, :deleted_at])
+    |> validate_required([:email, :user_id, :calendar_event_id])
     |> validate_format(:email, ~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/)
     |> validate_inclusion(:role, @valid_roles)
     |> validate_inclusion(:status, @valid_statuses)
+    |> foreign_key_constraint(:user_id)
     |> foreign_key_constraint(:calendar_event_id)
   end
 end

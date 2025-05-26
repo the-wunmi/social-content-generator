@@ -25,11 +25,39 @@
         <dd class="mt-1 text-sm text-gray-900">{@meeting.calendar_event.title}</dd>
       </div>
       <div>
-        <dt class="text-sm font-medium text-gray-500">Status</dt>
+        <dt class="text-sm font-medium text-gray-500">Platform</dt>
         <dd class="mt-1">
-          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-            {@meeting.status || "scheduled"}
-          </span>
+          <div :if={@meeting.integration} class="flex items-center">
+            <img
+              src={@meeting.integration.logo}
+              alt={@meeting.integration.name}
+              class="w-5 h-5 rounded mr-2"
+              onerror="this.style.display='none'"
+            />
+            <span class="text-sm text-gray-900">{@meeting.integration.name}</span>
+          </div>
+          <span :if={!@meeting.integration} class="text-sm text-gray-500">Unknown Platform</span>
+        </dd>
+      </div>
+      <div :if={length(@meeting.attendees) > 0}>
+        <dt class="text-sm font-medium text-gray-500">
+          Attendees ({length(@meeting.attendees)})
+        </dt>
+        <dd class="mt-1">
+          <div class="flex flex-wrap gap-1">
+            <span
+              :for={attendee <- @meeting.attendees}
+              class="inline-flex items-center px-2 py-1 rounded-full text-xs"
+              class={
+                case attendee.role do
+                  "organizer" -> "bg-green-100 text-green-800"
+                  _ -> "bg-blue-100 text-blue-800"
+                end
+              }
+            >
+              {attendee.name}
+            </span>
+          </div>
         </dd>
       </div>
       <%!-- TODO log actual meeting start and end time --%>

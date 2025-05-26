@@ -6,7 +6,6 @@ defmodule SocialContentGenerator.Meetings.Meeting do
   schema "meetings" do
     field :status, :string
     field :transcript, :string
-    field :configuration, :map
     field :deleted_at, :utc_datetime
 
     belongs_to :calendar_event, SocialContentGenerator.Calendars.CalendarEvent
@@ -27,7 +26,6 @@ defmodule SocialContentGenerator.Meetings.Meeting do
     |> cast(attrs, [
       :transcript,
       :status,
-      :configuration,
       :user_id,
       :bot_id,
       :calendar_event_id,

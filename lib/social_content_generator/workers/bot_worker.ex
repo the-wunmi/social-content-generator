@@ -109,7 +109,8 @@ defmodule SocialContentGenerator.Workers.BotWorker do
       # Find the user who owns this integration
       user_integration =
         from(ui in SocialContentGenerator.Users.UserIntegration,
-          where: ui.integration_id == ^calendar_event.integration_id,
+          where:
+            ui.integration_id == ^calendar_event.integration_id and ui.user_id == ^bot.user_id,
           preload: [:user]
         )
         |> Repo.one()
@@ -119,7 +120,8 @@ defmodule SocialContentGenerator.Workers.BotWorker do
         case Meetings.create_meeting(%{
                calendar_event_id: calendar_event.id,
                user_id: user_integration.user_id,
-               integration_id: calendar_event.integration_id,
+               integration_id:
+                 Recall.get_meeting_platform_integration_id(calendar_event.meeting_url),
                bot_id: bot.id,
                transcript: transcript,
                status: "completed"
@@ -128,7 +130,7 @@ defmodule SocialContentGenerator.Workers.BotWorker do
             Logger.info("Created meeting #{meeting.id} for completed bot #{bot.id}")
 
             # Store attendees from bot data
-            store_meeting_attendees(meeting, participants)
+            store_meeting_attendees(meeting, participants, calendar_event)
 
             # Update bot status
             Bot.changeset(bot, %{status: "inactive"})
@@ -176,11 +178,7 @@ defmodule SocialContentGenerator.Workers.BotWorker do
                 integration_bot_id: bot_data.integration_bot_id,
                 status: bot_data.status,
                 join_at: join_at,
-                configuration: %{
-                  recall_status: bot_data.recall_status,
-                  join_offset_minutes: join_offset,
-                  meeting_platform: Recall.extract_meeting_platform(meeting_url)
-                },
+                user_id: calendar_event.user_id,
                 integration_id: calendar_event.integration_id
               })
               |> Repo.insert()
@@ -205,110 +203,95 @@ defmodule SocialContentGenerator.Workers.BotWorker do
     end
   end
 
-  defp store_meeting_attendees(meeting, participants) when is_list(participants) do
-    # Get existing attendees
-    existing_attendees =
-      from(a in MeetingAttendee, where: a.meeting_id == ^meeting.id)
-      |> Repo.all()
+  defp store_meeting_attendees(meeting, participants, _calendar_event)
+       when not is_list(participants) do
+    Logger.warning(
+      "No valid participants data for meeting #{meeting.id}: #{inspect(participants)}"
+    )
 
-    # Convert new attendees data to normalized format
-    new_attendees =
+    :ok
+  end
+
+  defp store_meeting_attendees(meeting, participants, calendar_event) do
+    # Preload calendar event attendees for name matching
+    calendar_event = Repo.preload(calendar_event, [:attendees])
+
+    # Create a lookup map of calendar attendees by normalized name
+    calendar_attendees_by_name =
+      calendar_event.attendees
+      |> Enum.map(fn attendee ->
+        {normalize_name(attendee.name), attendee}
+      end)
+      |> Map.new()
+
+    # Convert participants to meeting attendees with email guessing
+    meeting_attendees =
       Enum.map(participants, fn participant ->
+        participant_name = participant["name"] || "Unknown Participant"
+        normalized_name = normalize_name(participant_name)
+
+        # Try to find matching calendar attendee by name
+        guessed_email =
+          case Map.get(calendar_attendees_by_name, normalized_name) do
+            %{email: email} -> email
+            nil -> generate_fallback_email(participant_name)
+          end
+
         %{
-          email: participant["email"],
-          name: participant["name"] || "Unknown",
+          email: guessed_email,
+          name: participant_name,
           role: if(participant["is_host"], do: "organizer", else: "attendee"),
+          user_id: calendar_event.user_id,
           meeting_id: meeting.id
         }
       end)
 
-    Logger.debug(
-      "Syncing attendees for meeting #{meeting.id}: #{length(existing_attendees)} existing, #{length(new_attendees)} new"
-    )
-
-    # Create maps for efficient lookup
-    existing_by_email = Map.new(existing_attendees, &{&1.email, &1})
-    new_by_email = Map.new(new_attendees, &{&1.email, &1})
-
-    # Find attendees to delete (exist in DB but not in new data)
-    emails_to_delete =
-      MapSet.difference(
-        MapSet.new(Map.keys(existing_by_email)),
-        MapSet.new(Map.keys(new_by_email))
-      )
-
-    # Find attendees to insert (exist in new data but not in DB)
-    emails_to_insert =
-      MapSet.difference(
-        MapSet.new(Map.keys(new_by_email)),
-        MapSet.new(Map.keys(existing_by_email))
-      )
-
-    # Find attendees to update (exist in both but data might have changed)
-    emails_to_update =
-      MapSet.intersection(
-        MapSet.new(Map.keys(existing_by_email)),
-        MapSet.new(Map.keys(new_by_email))
-      )
-      |> Enum.filter(fn email ->
-        existing = existing_by_email[email]
-        new_data = new_by_email[email]
-
-        existing.name != new_data.name || existing.role != new_data.role
-      end)
-
-    # Perform deletions
-    if not Enum.empty?(emails_to_delete) do
-      attendee_ids_to_delete =
-        emails_to_delete
-        |> Enum.map(&existing_by_email[&1].id)
-
-      {deleted_count, _} =
-        from(a in MeetingAttendee, where: a.id in ^attendee_ids_to_delete)
-        |> Repo.delete_all()
-
-      Logger.debug("Deleted #{deleted_count} attendees")
-    end
-
-    # Perform insertions
+    # Insert all attendees (no need to check for existing since meeting is new)
     inserted_count =
-      Enum.reduce(emails_to_insert, 0, fn email, acc ->
+      Enum.reduce(meeting_attendees, 0, fn attendee_attrs, acc ->
         case %MeetingAttendee{}
-             |> MeetingAttendee.changeset(new_by_email[email])
+             |> MeetingAttendee.changeset(attendee_attrs)
              |> Repo.insert() do
-          {:ok, _} -> acc + 1
-          {:error, _} -> acc
+          {:ok, _} ->
+            acc + 1
+
+          {:error, changeset} ->
+            Logger.warning("Failed to insert meeting attendee: #{inspect(changeset.errors)}")
+            acc
         end
       end)
 
-    if inserted_count > 0 do
-      Logger.debug("Inserted #{inserted_count} attendees")
-    end
-
-    # Perform updates
-    updated_count =
-      Enum.reduce(emails_to_update, 0, fn email, acc ->
-        existing_attendee = existing_by_email[email]
-        new_data = new_by_email[email]
-
-        case existing_attendee
-             |> MeetingAttendee.changeset(new_data)
-             |> Repo.update() do
-          {:ok, _} -> acc + 1
-          {:error, _} -> acc
-        end
-      end)
-
-    if updated_count > 0 do
-      Logger.debug("Updated #{updated_count} attendees")
-    end
-
-    Logger.info(
-      "Synced attendees for meeting #{meeting.id}: #{inserted_count} inserted, #{updated_count} updated, #{Enum.count(emails_to_delete)} deleted"
-    )
+    Logger.info("Created #{inserted_count} meeting attendees for meeting #{meeting.id}")
   end
 
-  defp store_meeting_attendees(_meeting, _), do: :ok
+  # Helper function to normalize names for matching
+  defp normalize_name(name) when is_binary(name) do
+    name
+    |> String.downcase()
+    |> String.trim()
+    # Remove common prefixes/suffixes
+    |> String.replace(~r/\b(mr|mrs|ms|dr|prof)\.?\s*/i, "")
+    # Remove extra whitespace
+    |> String.replace(~r/\s+/, " ")
+  end
+
+  defp normalize_name(_), do: ""
+
+  # Generate a fallback email when no match is found
+  defp generate_fallback_email(name) when is_binary(name) do
+    # Create a simple email from the name
+    email_prefix =
+      name
+      |> String.downcase()
+      |> String.replace(~r/[^a-z0-9\s]/, "")
+      |> String.replace(~r/\s+/, ".")
+      # Limit length
+      |> String.slice(0, 20)
+
+    "#{email_prefix}@unknown.participant"
+  end
+
+  defp generate_fallback_email(_), do: "unknown@unknown.participant"
 
   defp schedule_automation_processing(meeting) do
     # Schedule the existing meeting worker to handle automation

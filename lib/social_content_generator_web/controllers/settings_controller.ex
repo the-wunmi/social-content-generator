@@ -39,12 +39,12 @@ defmodule SocialContentGeneratorWeb.SettingsController do
   end
 
   def edit_automation(conn, %{"id" => id}) do
-    automation = Automations.get_automation(id)
+    automation = Automations.get_automation(id: id, user_id: conn.assigns.current_user.id)
     render(conn, :edit_automation, automation: automation)
   end
 
   def update_automation(conn, %{"id" => id, "automation" => automation_params}) do
-    automation = Automations.get_automation(id)
+    automation = Automations.get_automation(id: id, user_id: conn.assigns.current_user.id)
 
     case Automations.update_automation(automation, automation_params) do
       {:ok, _automation} ->
@@ -60,7 +60,7 @@ defmodule SocialContentGeneratorWeb.SettingsController do
   end
 
   def delete_automation(conn, %{"id" => id}) do
-    automation = Automations.get_automation(id)
+    automation = Automations.get_automation(id: id, user_id: conn.assigns.current_user.id)
     {:ok, _automation} = Automations.delete_automation(automation)
 
     conn

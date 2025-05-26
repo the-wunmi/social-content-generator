@@ -116,6 +116,61 @@ The application uses background workers to manage bot lifecycle:
 - Transcripts are stored securely and associated with your account
 - Bot IDs are tracked to ensure you only access your own meeting data
 
+## Meeting Attendee Matching
+
+The system now optimizes meeting attendee creation by using intelligent name matching to guess email addresses from calendar event attendees when the bot API returns participant data without emails.
+
+### How It Works
+
+1. **Bot Participant Data** (from Recall API):
+```json
+[
+  {
+    "id": 100,
+    "name": "Adewunmi Akinsanya",
+    "platform": "unknown",
+    "is_host": true,
+    "events": [
+      {"code": "join", "created_at": "2025-05-25T22:43:42.229000Z"},
+      {"code": "leave", "created_at": "2025-05-25T22:43:58.133000Z"}
+    ]
+  }
+]
+```
+
+2. **Calendar Event Attendees** (from Google Calendar):
+```json
+[
+  {
+    "email": "adewunmi@example.com",
+    "name": "Adewunmi Akinsanya",
+    "role": "organizer"
+  }
+]
+```
+
+3. **Name Matching Process**:
+   - Normalizes names by removing titles (Mr, Mrs, Dr, etc.)
+   - Converts to lowercase and trims whitespace
+   - Matches bot participants to calendar attendees by normalized name
+   - Falls back to generated email (`firstname.lastname@unknown.participant`) if no match
+
+4. **Result**:
+```elixir
+%MeetingAttendee{
+  email: "adewunmi@example.com",  # Matched from calendar
+  name: "Adewunmi Akinsanya",
+  role: "organizer"  # Based on is_host flag
+}
+```
+
+### Benefits
+
+- **No duplicate checking**: Since meetings are created once, no need to sync existing attendees
+- **Smart email guessing**: Uses calendar data to provide real email addresses when possible
+- **Fallback handling**: Generates valid fallback emails for unmatched participants
+- **Simplified logic**: Removed complex sync operations for better performance
+
 ## Development
 
 ### Database Operations

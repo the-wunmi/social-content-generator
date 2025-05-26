@@ -70,6 +70,7 @@ defmodule SocialContentGenerator.Workers.MeetingWorker do
       content: post_content,
       output_type: "social_post",
       status: "draft",
+      user_id: meeting.user_id,
       meeting_id: meeting.id,
       automation_id: automation.id,
       metadata: %{
@@ -87,6 +88,7 @@ defmodule SocialContentGenerator.Workers.MeetingWorker do
       content: email_content,
       output_type: "email",
       status: "draft",
+      user_id: meeting.user_id,
       meeting_id: meeting.id,
       automation_id: automation.id,
       metadata: %{

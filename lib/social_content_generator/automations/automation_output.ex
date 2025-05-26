@@ -10,6 +10,7 @@ defmodule SocialContentGenerator.Automations.AutomationOutput do
     field :metadata, :map, default: %{}
     field :deleted_at, :utc_datetime
 
+    belongs_to :user, SocialContentGenerator.Users.User
     belongs_to :meeting, SocialContentGenerator.Meetings.Meeting
     belongs_to :automation, SocialContentGenerator.Automations.Automation
 
@@ -27,13 +28,15 @@ defmodule SocialContentGenerator.Automations.AutomationOutput do
       :output_type,
       :status,
       :metadata,
+      :user_id,
       :automation_id,
       :meeting_id,
       :deleted_at
     ])
-    |> validate_required([:content, :output_type, :automation_id, :meeting_id])
+    |> validate_required([:content, :output_type, :user_id, :automation_id, :meeting_id])
     |> validate_inclusion(:output_type, @valid_output_types)
     |> validate_inclusion(:status, @valid_statuses)
+    |> foreign_key_constraint(:user_id)
     |> foreign_key_constraint(:automation_id)
     |> foreign_key_constraint(:meeting_id)
   end

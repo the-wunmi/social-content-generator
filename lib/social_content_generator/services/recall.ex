@@ -162,7 +162,7 @@ defmodule SocialContentGenerator.Services.Recall do
         {:ok, bot_data}
 
       {:ok, %{status: status} = bot_data}
-      when status in ["joining_call", "in_waiting_room", "scheduled"] ->
+      when status in ["joining_call", "in_waiting_room", "scheduled", "ready"] ->
         # Bot is joining or waiting
         {:ok, bot_data}
 
@@ -183,15 +183,35 @@ defmodule SocialContentGenerator.Services.Recall do
   def extract_meeting_platform(meeting_url) when is_binary(meeting_url) do
     cond do
       String.contains?(meeting_url, "zoom.us") -> "zoom"
-      String.contains?(meeting_url, "teams.microsoft.com") -> "teams"
-      String.contains?(meeting_url, "meet.google.com") -> "google_meet"
-      String.contains?(meeting_url, "webex.com") -> "webex"
-      String.contains?(meeting_url, "gotomeeting.com") -> "gotomeeting"
+      String.contains?(meeting_url, "teams.microsoft.com") -> "microsoft-teams"
+      String.contains?(meeting_url, "meet.google.com") -> "google-meet"
       true -> "unknown"
     end
   end
 
   def extract_meeting_platform(_), do: "unknown"
+
+  @doc """
+  Gets the integration ID for a meeting platform based on the meeting URL.
+  Returns the integration ID or nil if not found.
+  """
+  def get_meeting_platform_integration_id(meeting_url) do
+    platform = extract_meeting_platform(meeting_url)
+
+    case platform do
+      "unknown" ->
+        nil
+
+      platform_slug ->
+        case SocialContentGenerator.Repo.get_by(
+               SocialContentGenerator.Integrations.Integration,
+               slug: platform_slug
+             ) do
+          nil -> nil
+          integration -> integration.id
+        end
+    end
+  end
 
   def delete_bot(bot_id) do
     api_key = ApiClient.recall_api_key()

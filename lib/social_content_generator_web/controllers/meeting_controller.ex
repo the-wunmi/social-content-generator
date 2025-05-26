@@ -13,7 +13,7 @@ defmodule SocialContentGeneratorWeb.MeetingController do
 
     meetings =
       Meetings.list_meetings(user_id: user_id)
-      |> Repo.preload([:calendar_event, :attendees, :bot])
+      |> Repo.preload([:calendar_event, :attendees, :bot, :integration])
       |> Enum.sort_by(& &1.calendar_event.start_time, {:desc, DateTime})
 
     render(conn, :index, meetings: meetings)
@@ -21,8 +21,8 @@ defmodule SocialContentGeneratorWeb.MeetingController do
 
   def show(conn, %{"id" => id}) do
     meeting =
-      Meetings.get_meeting(id)
-      |> Repo.preload([:calendar_event, :attendees, :bot, :automation_outputs])
+      Meetings.get_meeting(id: id, user_id: conn.assigns.current_user.id)
+      |> Repo.preload([:calendar_event, :attendees, :bot, :automation_outputs, :integration])
 
     case meeting do
       nil ->

@@ -7,7 +7,8 @@ defmodule SocialContentGenerator.Calendars do
   alias SocialContentGenerator.Repo
   alias SocialContentGenerator.Calendars.{CalendarEvent, CalendarEventAttendee}
   alias SocialContentGenerator.Integrations
-  alias SocialContentGenerator.Calendars.GoogleCalendar
+
+  @valid_filters [:id, :user_id, :deleted_at]
 
   @doc """
   Gets all calendar events for a user from the database.
@@ -47,9 +48,19 @@ defmodule SocialContentGenerator.Calendars do
   @doc """
   Gets a calendar event by ID.
   """
-  def get_calendar_event(id) do
+  def get_calendar_event(id) when is_binary(id) or is_number(id) do
     CalendarEvent.not_deleted(CalendarEvent)
     |> where(id: ^id)
+    |> preload([:integration, :attendees])
+    |> Repo.one()
+  end
+
+  @spec get_calendar_event(keyword()) :: %CalendarEvent{} | nil
+  def get_calendar_event(filters) when is_list(filters) do
+    validate_filters!(filters, @valid_filters)
+
+    CalendarEvent.not_deleted(CalendarEvent)
+    |> where(^filters)
     |> preload([:integration, :attendees])
     |> Repo.one()
   end
@@ -73,27 +84,14 @@ defmodule SocialContentGenerator.Calendars do
         ui.integration.provider == "google" and "calendar" in ui.integration.scopes
       end)
 
-    integration_ids = Enum.map(integrations, & &1.integration_id)
-
-    # Get all events if we have integrations
     events =
-      if Enum.empty?(integration_ids) do
-        []
-      else
-        CalendarEvent.not_deleted(CalendarEvent)
-        |> where([ce], ce.integration_id in ^integration_ids)
-        |> order_by([ce], desc: ce.start_time)
-        |> preload([:integration, :attendees])
-        |> Repo.all()
-      end
+      CalendarEvent.not_deleted(CalendarEvent)
+      |> where([ce], ce.user_id == ^user_id)
+      |> order_by([ce], desc: ce.start_time)
+      |> preload([:integration, :attendees])
+      |> Repo.all()
 
     {integrations, events}
-  end
-
-  # Helper functions for sync time ranges
-  defp get_sync_start_time do
-    # Fetch events from 30 days ago to capture recent past events
-    DateTime.utc_now() |> DateTime.add(-30 * 24 * 60 * 60, :second)
   end
 
   defp should_sync_calendar_data?(integrations) do
@@ -121,5 +119,18 @@ defmodule SocialContentGenerator.Calendars do
       |> CalendarWorker.new(schedule_in: 5)
       |> Oban.insert()
     end)
+  end
+
+  # Validate that all filter keys are valid fields
+  defp validate_filters!(filters, valid_fields) do
+    invalid_fields =
+      filters
+      |> Keyword.keys()
+      |> Enum.reject(&(&1 in valid_fields))
+
+    if invalid_fields != [] do
+      raise ArgumentError,
+            "Invalid filter fields: #{inspect(invalid_fields)}. Valid fields: #{inspect(valid_fields)}"
+    end
   end
 end

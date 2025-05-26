@@ -1,44 +1,27 @@
 defmodule SocialContentGenerator.Calendars.GoogleCalendar do
   @moduledoc """
-  Handles integration with Google Calendar.
+  Handles Google Calendar integration with database operations.
+  Uses the GoogleCalendar service for API interactions.
   """
 
+  alias SocialContentGenerator.Services.GoogleCalendar, as: GoogleCalendarService
   alias SocialContentGenerator.Integrations
-  alias SocialContentGenerator.Integrations.Integration
   alias SocialContentGenerator.Calendars.CalendarEvent
   alias SocialContentGenerator.Calendars.CalendarEventAttendee
   alias SocialContentGenerator.Users.UserIntegration
   alias SocialContentGenerator.Repo
   import Ecto.Query
 
-  @google_calendar_api_url "https://www.googleapis.com/calendar/v3"
-
   @doc """
   Fetches events from Google Calendar API and stores them in the database.
   """
   def fetch_and_store_events(%UserIntegration{} = user_integration, start_time) do
-    headers = [
-      {"Authorization", "Bearer #{user_integration.access_token}"},
-      {"Content-Type", "application/json"}
-    ]
-
-    params =
-      URI.encode_query(%{
-        timeMin: DateTime.to_iso8601(start_time),
-        singleEvents: true,
-        orderBy: "startTime"
-      })
-
-    case HTTPoison.get("#{@google_calendar_api_url}/calendars/primary/events?#{params}", headers) do
-      {:ok, %{status_code: 200, body: response_body}} ->
-        {:ok, response} = Jason.decode(response_body)
-
-        events =
-          Enum.map(response["items"], &upsert_calendar_event(&1, user_integration.integration_id))
-
+    case GoogleCalendarService.fetch_events(user_integration.access_token, start_time) do
+      {:ok, events_data} ->
+        events = Enum.map(events_data, &upsert_calendar_event(&1, user_integration))
         {:ok, events}
 
-      {:ok, %{status_code: 401, body: _}} ->
+      {:error, :token_expired} ->
         # Token expired, try to refresh
         case refresh_token_if_needed(user_integration) do
           {:ok, refreshed_integration} ->
@@ -48,11 +31,8 @@ defmodule SocialContentGenerator.Calendars.GoogleCalendar do
             {:error, "Authentication failed: #{reason}"}
         end
 
-      {:ok, %{status_code: status_code, body: response_body}} ->
-        {:error, "Failed to fetch events: #{status_code} - #{response_body}"}
-
-      {:error, %{reason: reason}} ->
-        {:error, "Failed to fetch events: #{reason}"}
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -69,20 +49,21 @@ defmodule SocialContentGenerator.Calendars.GoogleCalendar do
     fetch_and_store_events(user_integration, start_time)
   end
 
-  defp upsert_calendar_event(event_data, integration_id) do
-    # Extract meeting URL from description or location
-    meeting_url = extract_meeting_url(event_data)
+  defp upsert_calendar_event(event_data, user_integration) do
+    # Extract meeting URL using the service
+    meeting_url = GoogleCalendarService.extract_meeting_url(event_data)
     integration_event_id = event_data["id"]
 
     calendar_event_attrs = %{
       integration_event_id: integration_event_id,
       title: event_data["summary"] || "Untitled Event",
       description: event_data["description"],
-      start_time: parse_datetime(event_data["start"]),
-      end_time: parse_datetime(event_data["end"]),
+      start_time: GoogleCalendarService.parse_datetime(event_data["start"]),
+      end_time: GoogleCalendarService.parse_datetime(event_data["end"]),
       location: event_data["location"],
       meeting_url: meeting_url,
-      integration_id: integration_id
+      user_id: user_integration.user_id,
+      integration_id: user_integration.integration_id
     }
 
     # Check if event already exists
@@ -90,7 +71,8 @@ defmodule SocialContentGenerator.Calendars.GoogleCalendar do
       CalendarEvent.not_deleted(CalendarEvent)
       |> where(
         [ce],
-        ce.integration_event_id == ^integration_event_id and ce.integration_id == ^integration_id
+        ce.integration_event_id == ^integration_event_id and
+          ce.integration_id == ^user_integration.integration_id
       )
       |> Repo.one()
 
@@ -135,7 +117,8 @@ defmodule SocialContentGenerator.Calendars.GoogleCalendar do
           name: attendee["displayName"],
           role: (attendee["organizer"] && "organizer") || "attendee",
           status: attendee["responseStatus"],
-          calendar_event_id: calendar_event.id
+          calendar_event_id: calendar_event.id,
+          user_id: calendar_event.user_id
         }
       end)
 
@@ -244,117 +227,4 @@ defmodule SocialContentGenerator.Calendars.GoogleCalendar do
         {:error, reason}
     end
   end
-
-  defp extract_meeting_url(event_data) do
-    cond do
-      url = event_data["hangoutLink"] -> url
-      url = extract_conference_url(event_data["conferenceData"]) -> url
-      url = extract_zoom_url(event_data["location"]) -> url
-      url = extract_teams_url(event_data["location"]) -> url
-      url = extract_meet_url(event_data["location"]) -> url
-      url = extract_zoom_url(event_data["description"]) -> url
-      url = extract_teams_url(event_data["description"]) -> url
-      url = extract_meet_url(event_data["description"]) -> url
-      true -> nil
-    end
-  end
-
-  defp extract_zoom_url(text) when is_binary(text) do
-    # More comprehensive Zoom URL patterns
-    patterns = [
-      # Standard join links with optional params
-      ~r/https:\/\/[\w-]+\.zoom\.us\/j\/\d+(?:\?[\w=&%-]*)?/,
-      # Direct zoom.us links
-      ~r/https:\/\/zoom\.us\/j\/\d+(?:\?[\w=&%-]*)?/,
-      # Meeting-specific links
-      ~r/https:\/\/[\w-]+\.zoom\.us\/meeting\/\d+\/[\w-]+/
-    ]
-
-    Enum.find_value(patterns, fn pattern ->
-      case Regex.run(pattern, text) do
-        [url] -> url
-        _ -> nil
-      end
-    end)
-  end
-
-  defp extract_zoom_url(_), do: nil
-
-  defp extract_teams_url(text) when is_binary(text) do
-    # More comprehensive Teams URL patterns
-    patterns = [
-      ~r/https:\/\/teams\.microsoft\.com\/l\/meetup-join\/[\w%-]+/,
-      ~r/https:\/\/teams\.live\.com\/meet\/[\w-]+/,
-      ~r/https:\/\/[\w-]+\.teams\.microsoft\.com\/[\w\/-]+/
-    ]
-
-    Enum.find_value(patterns, fn pattern ->
-      case Regex.run(pattern, text) do
-        [url] -> url
-        _ -> nil
-      end
-    end)
-  end
-
-  defp extract_teams_url(_), do: nil
-
-  defp extract_meet_url(text) when is_binary(text) do
-    # Google Meet URL patterns
-    patterns = [
-      ~r/https:\/\/meet\.google\.com\/[\w-]+/,
-      ~r/https:\/\/meet\.google\.com\/lookup\/[\w-]+/
-    ]
-
-    Enum.find_value(patterns, fn pattern ->
-      case Regex.run(pattern, text) do
-        [url] -> url
-        _ -> nil
-      end
-    end)
-  end
-
-  defp extract_meet_url(_), do: nil
-
-  defp extract_conference_url(nil), do: nil
-
-  defp extract_conference_url(conference_data) when is_map(conference_data) do
-    # Extract from entryPoints - prioritize video entry points
-    entry_points = conference_data["entryPoints"] || []
-
-    # Look for video entry point first (most reliable for joining meetings)
-    video_entry =
-      Enum.find(entry_points, fn entry ->
-        entry["entryPointType"] == "video"
-      end)
-
-    case video_entry do
-      %{"uri" => uri} when is_binary(uri) ->
-        uri
-
-      _ ->
-        # Fallback to any entry point with a valid URI
-        case Enum.find(entry_points, fn entry ->
-               is_binary(entry["uri"]) and String.starts_with?(entry["uri"], "http")
-             end) do
-          %{"uri" => uri} -> uri
-          _ -> nil
-        end
-    end
-  end
-
-  defp parse_datetime(%{"dateTime" => date_time}) do
-    case DateTime.from_iso8601(date_time) do
-      {:ok, datetime, _} -> datetime
-      {:error, _} -> DateTime.utc_now()
-    end
-  end
-
-  defp parse_datetime(%{"date" => date}) do
-    case DateTime.from_iso8601("#{date}T00:00:00Z") do
-      {:ok, datetime, _} -> datetime
-      {:error, _} -> DateTime.utc_now()
-    end
-  end
-
-  defp parse_datetime(_), do: DateTime.utc_now()
 end
